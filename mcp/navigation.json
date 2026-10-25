@@ -1,0 +1,267 @@
+{
+  "schema_version": "1.0",
+  "project": "V4SH",
+  "purpose": "Authoritative navigation and flow map for the V4SH Android implementation.",
+  "sources": [
+    "V4SH Project Audit & Implementation Roadmap",
+    "V4SH exported Stitch screen registry"
+  ],
+  "rules": [
+    "Do not invent routes that are not represented by the approved product flow.",
+    "Bottom navigation is locked to HOME | TRANSACTIONS | RECEIVE | PROFILE.",
+    "Setup is a first-time flow and ends at Home.",
+    "QR payment flow is Home → QR Scanner → QR Recipient → Amount Entry → Review Payment → Payment in Progress → terminal payment state.",
+    "QR validation errors occur before payment initiation and must not be treated as payment failures.",
+    "SUCCESS requires definitive confirmation.",
+    "FAILED requires definitive failure.",
+    "UNKNOWN means payment may have been initiated but final status cannot be determined; do not offer immediate Retry Payment.",
+    "CANCELLED is only valid when the user stops before payment initiation.",
+    "Stop waiting does not cancel an already initiated payment.",
+    "No Mobile Network is a pre-initiation, non-destructive state."
+  ],
+  "global_navigation": {
+    "bottom_tabs": [
+      {
+        "id": "home",
+        "label": "Home",
+        "screen": "home"
+      },
+      {
+        "id": "transactions",
+        "label": "Transactions",
+        "screen": "transactions"
+      },
+      {
+        "id": "receive",
+        "label": "Receive",
+        "screen": "receive_money"
+      },
+      {
+        "id": "profile",
+        "label": "Profile",
+        "screen": "profile"
+      }
+    ]
+  },
+  "flows": {
+    "first_time_setup": {
+      "entry": "welcome_setup",
+      "steps": [
+        "welcome_setup",
+        "payment_readiness",
+        "payment_access_setup",
+        "payment_sim_selection",
+        "home"
+      ],
+      "terminal": "home"
+    },
+    "qr_payment": {
+      "entry": "home",
+      "steps": [
+        "home",
+        "qr_scanner",
+        "qr_recipient",
+        "amount_entry",
+        "review_payment",
+        "payment_in_progress"
+      ],
+      "terminals": [
+        "payment_successful",
+        "payment_failed",
+        "payment_status_unclear",
+        "payment_cancelled"
+      ],
+      "pre_initiation_errors": [
+        "camera_access_required",
+        "qr_code_not_recognized",
+        "unsupported_qr_code",
+        "payment_details_missing",
+        "no_mobile_network"
+      ]
+    },
+    "transactions": {
+      "entry": "transactions",
+      "steps": [
+        "transactions",
+        "transaction_details"
+      ]
+    },
+    "receive": {
+      "entry": "receive_money",
+      "steps": [
+        "receive_money",
+        "upi_details"
+      ]
+    },
+    "profile": {
+      "entry": "profile",
+      "routes": [
+        "upi_details",
+        "app_security",
+        "privacy",
+        "help_center",
+        "contact_support"
+      ]
+    }
+  },
+  "transitions": [
+    {
+      "from": "welcome_setup",
+      "to": "payment_readiness",
+      "trigger": "Continue"
+    },
+    {
+      "from": "payment_readiness",
+      "to": "payment_access_setup",
+      "trigger": "Continue / setup payment access"
+    },
+    {
+      "from": "payment_access_setup",
+      "to": "payment_sim_selection",
+      "trigger": "Continue when payment access is ready"
+    },
+    {
+      "from": "payment_sim_selection",
+      "to": "home",
+      "trigger": "Confirm SIM selection"
+    },
+    {
+      "from": "home",
+      "to": "qr_scanner",
+      "trigger": "Scan any UPI QR code"
+    },
+    {
+      "from": "qr_scanner",
+      "to": "qr_recipient",
+      "trigger": "Valid supported UPI QR recognized"
+    },
+    {
+      "from": "qr_scanner",
+      "to": "camera_access_required",
+      "trigger": "Camera permission unavailable"
+    },
+    {
+      "from": "qr_scanner",
+      "to": "qr_code_not_recognized",
+      "trigger": "QR cannot be recognized"
+    },
+    {
+      "from": "qr_recipient",
+      "to": "amount_entry",
+      "trigger": "Continue with valid recipient"
+    },
+    {
+      "from": "qr_recipient",
+      "to": "unsupported_qr_code",
+      "trigger": "QR format unsupported"
+    },
+    {
+      "from": "qr_recipient",
+      "to": "payment_details_missing",
+      "trigger": "Required payment details missing"
+    },
+    {
+      "from": "amount_entry",
+      "to": "review_payment",
+      "trigger": "Valid amount submitted"
+    },
+    {
+      "from": "review_payment",
+      "to": "payment_in_progress",
+      "trigger": "Pay / initiate payment"
+    },
+    {
+      "from": "review_payment",
+      "to": "payment_cancelled",
+      "trigger": "User stops before payment initiation"
+    },
+    {
+      "from": "payment_in_progress",
+      "to": "payment_successful",
+      "trigger": "Definitive payment confirmation"
+    },
+    {
+      "from": "payment_in_progress",
+      "to": "payment_failed",
+      "trigger": "Definitive payment failure"
+    },
+    {
+      "from": "payment_in_progress",
+      "to": "payment_status_unclear",
+      "trigger": "Payment may have been initiated but final status is unknown"
+    },
+    {
+      "from": "payment_in_progress",
+      "to": "no_mobile_network",
+      "trigger": "Mobile network becomes unavailable before payment initiation"
+    },
+    {
+      "from": "transactions",
+      "to": "transaction_details",
+      "trigger": "Open a transaction record"
+    },
+    {
+      "from": "receive_money",
+      "to": "upi_details",
+      "trigger": "View/copy UPI details"
+    },
+    {
+      "from": "profile",
+      "to": "upi_details",
+      "trigger": "Payment Account"
+    },
+    {
+      "from": "profile",
+      "to": "app_security",
+      "trigger": "Security & Privacy / App Security"
+    },
+    {
+      "from": "profile",
+      "to": "privacy",
+      "trigger": "Security & Privacy / Privacy"
+    },
+    {
+      "from": "profile",
+      "to": "help_center",
+      "trigger": "Help & Support"
+    },
+    {
+      "from": "help_center",
+      "to": "contact_support",
+      "trigger": "Contact Support"
+    }
+  ],
+  "screen_reference_check": {
+    "unresolved_screen_ids": [],
+    "registered_screen_ids": [
+      "amount_entry",
+      "app_security",
+      "camera_access_required",
+      "contact_support",
+      "help_center",
+      "home",
+      "no_mobile_network",
+      "payment_access_setup",
+      "payment_cancelled",
+      "payment_details_missing",
+      "payment_failed",
+      "payment_in_progress",
+      "payment_readiness",
+      "payment_sim_selection",
+      "payment_status_unclear",
+      "payment_successful",
+      "privacy",
+      "profile",
+      "qr_code_not_recognized",
+      "qr_recipient",
+      "qr_scanner",
+      "receive_money",
+      "review_payment",
+      "transaction_details",
+      "transactions",
+      "unsupported_qr_code",
+      "upi_details",
+      "welcome_setup"
+    ]
+  }
+}

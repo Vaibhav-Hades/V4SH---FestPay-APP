@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>V4SH — QR Recipient</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@400;500;700&amp;family=IBM+Plex+Serif:wght@400;500;700&amp;family=Libre+Caslon+Text:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {theme: {extend: {colors: {brand: "#3D0C1A", cream: "#FFF8F0", surface: "#f9f9f9", "inverse-primary": "#ffb2bf", "on-error": "#ffffff", "on-secondary-fixed": "#2c1609", "on-tertiary-container": "#858687", "surface-dim": "#dadada", "on-primary-container": "#ba7280", "on-secondary-container": "#7a5a48", "on-secondary": "#ffffff", "inverse-surface": "#2f3131", "tertiary-container": "#1d1f1f", "outline-variant": "#d7c1c4", "primary-container": "#3d0c1a", "tertiary-fixed": "#e2e2e2", "on-primary": "#ffffff", "on-primary-fixed-variant": "#6f3441", outline: "#847375", primary: "#150004", "surface-container-low": "#f3f3f4", "on-tertiary-fixed": "#1a1c1c", "on-primary-fixed": "#390917", "surface-container-highest": "#e2e2e2", "inverse-on-surface": "#f0f1f1", "error-container": "#ffdad6", "on-surface-variant": "#524345", "on-background": "#1a1c1c", "surface-container-high": "#e8e8e8", "on-surface": "#1a1c1c", tertiary: "#040606", "surface-bright": "#f9f9f9", "on-secondary-fixed-variant": "#5d4030", "secondary-fixed": "#ffdbca", "surface-container-lowest": "#ffffff", "on-tertiary-fixed-variant": "#454747", "surface-variant": "#e2e2e2", "primary-fixed": "#ffd9de", background: "#f9f9f9", "tertiary-fixed-dim": "#c6c6c7", "surface-container": "#eeeeee", "secondary-fixed-dim": "#e7bea9", "surface-tint": "#8b4b58", "on-tertiary": "#ffffff", "on-error-container": "#93000a", error: "#ba1a1a", "primary-fixed-dim": "#ffb2bf", secondary: "#775746", "secondary-container": "#ffd4be"}, fontFamily: {serif: ["Newsreader", "Georgia", "serif"], sans: ["\"Plus Jakarta Sans\"", "-apple-system", "BlinkMacSystemFont", "sans-serif"], headline: ["Bodoni Moda"], display: ["Bodoni Moda"], body: ["IBM Plex Serif"], label: ["Libre Caslon Text"]}, fontSize: {}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}}}};</script>
+<style>
+    body {
+      background-color: #FFF8F0;
+      color: #231B19;
+      font-family: "Plus Jakarta Sans", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-editorial {
+      font-family: 'Newsreader', Georgia, serif;
+    }
+  </style>
+<meta content="mobile_stack" name="shell-type"/><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex justify-center items-start bg-[#FFF8F0] p-0 m-0 selection:bg-brand selection:text-white">
+<!-- Mobile Container (Android target ~390-412px width) -->
+<main class="w-full max-w-md min-h-screen bg-[#FFF8F0] flex flex-col justify-between px-6 py-5 relative"><div class="flex flex-col w-full">
+<!-- Top Navigation Sub-bar -->
+<div class="flex items-center justify-between py-space-sm mb-space-md"><div class="flex items-center gap-2"><button aria-label="Go back to QR recipient" class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">arrow_back</span></button><img alt="V" class="h-6 w-6 object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1UwiG0taX7NhIY64AYFlNsukb_UB7oQgma-AwtjGShs-xkQgYJJNHNvPM-Pj6OibjmvctyGFeGpb2JJL-B_KGvIfU6uLPXl_Vf26cZ3lmN5WyGvQqd5a-P62LNEp85mU2w-XdaoLFFNxLGVNUztWErrjllgHNV7ciwtNzBnnk6ysZHKVTmFaa--j70OwKMXt89ABC8-6dsRHrI013asYbeSdSNYR5zdvHTHl63JzdvtidyBzqmDByqucA"/></div><button aria-label="Help and assistance" class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">help_outline</span></button></div>
+<!-- Main Interaction Stack -->
+<div class="flex flex-col gap-space-lg">
+<!-- Compact Recipient Card -->
+<section class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm">
+<div class="flex items-center gap-3">
+<!-- Monogram Avatar -->
+<div class="w-12 h-12 rounded-full bg-secondary-container text-on-secondary-fixed flex items-center justify-center font-label-lg text-label-lg shrink-0">
+          AS
+        </div>
+<!-- Payee Text Information -->
+<div class="flex flex-col min-w-0 flex-1">
+<div class="flex items-center justify-between gap-1">
+<h2 class="font-headline-sm text-headline-sm text-on-surface truncate">Aarav Sharma</h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider shrink-0">
+              Standard UPI
+            </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant font-mono mt-0.5">aarav@upi</p>
+</div>
+</div>
+<!-- Scanned QR Origin Verification -->
+<div class="mt-3 pt-2.5 flex items-center gap-1.5 text-on-surface-variant bg-surface-container-low rounded-lg px-2.5 py-1.5">
+<span class="material-symbols-outlined text-[15px] text-primary-container" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-body-sm text-body-sm">Recipient verified from scanned UPI QR</span>
+</div>
+</section>
+<!-- Visual Amount Stage -->
+<section class="flex flex-col items-center text-center pt-space-xs">
+<h1 class="font-headline-lg text-headline-lg text-on-surface font-serif">Enter amount</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">How much would you like to pay?</p>
+<!-- Editorial Centered Amount Canvas -->
+<div class="mt-6 mb-2 flex items-baseline justify-center gap-1.5">
+<span class="font-headline-md text-headline-md text-secondary select-none font-serif">₹</span>
+<span class="font-display-lg text-display-lg text-primary-container font-serif tracking-tight" id="amount-display">500</span>
+<span class="w-0.5 h-8 bg-primary-container animate-pulse rounded-full ml-0.5"></span>
+</div>
+<!-- Quick Preset Chips -->
+<div class="flex items-center justify-center gap-2 mt-4 flex-wrap">
+<button class="chip-preset px-3.5 py-1.5 rounded-full font-label-md text-label-md bg-surface-container-low text-on-surface transition-all active:scale-95" onclick="setPreset('100', this)" type="button">
+          ₹100
+        </button>
+<button class="chip-preset px-3.5 py-1.5 rounded-full font-label-md text-label-md bg-surface-container-low text-on-surface transition-all active:scale-95" onclick="setPreset('200', this)" type="button">
+          ₹200
+        </button>
+<button class="chip-preset px-3.5 py-1.5 rounded-full font-label-md text-label-md bg-primary-container text-on-primary transition-all active:scale-95" onclick="setPreset('500', this)" type="button">
+          ₹500
+        </button>
+<button class="chip-preset px-3.5 py-1.5 rounded-full font-label-md text-label-md bg-surface-container-low text-on-surface transition-all active:scale-95" onclick="setPreset('1000', this)" type="button">
+          ₹1,000
+        </button>
+</div>
+</section>
+<!-- Optional Note Field -->
+<section class="flex flex-col gap-1.5 mt-2">
+<label class="font-label-md text-label-md text-on-surface-variant" for="payment-note">Add a note (optional)</label>
+<div class="flex items-center gap-2.5 bg-surface-container-lowest px-3.5 py-3 rounded-lg shadow-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">edit_note</span>
+<input class="w-full bg-transparent font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none" id="payment-note" maxlength="60" placeholder="What's this payment for?" type="text"/>
+</div>
+</section>
+</div>
+<!-- Bottom Fixed Navigation Panel -->
+<div class="mt-8 flex flex-col gap-3 pt-4">
+<!-- Primary Continue Action -->
+<button class="w-full h-13 py-3.5 px-6 rounded-lg bg-primary-container text-on-primary font-label-lg text-label-lg flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.99] transition-all shadow-sm" id="continue-btn" type="button">
+<span class="">Continue to Review</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+<!-- Secondary Navigation -->
+<button class="w-full py-2.5 text-center font-label-md text-label-md text-secondary hover:text-on-surface transition-colors" type="button">
+      Cancel
+    </button>
+<!-- Subtle Safety Reassurance Footnote -->
+<p class="font-body-sm text-body-sm text-on-surface-variant text-center pb-2">
+      Payment will be initiated only after you review the details.
+    </p>
+</div>
+</div>
+<script>
+  function setPreset(val, el) {
+    const display = document.getElementById('amount-display');
+    if (!display) return;
+    
+    // Format display string with commas if needed
+    const formatted = parseInt(val, 10).toLocaleString('en-IN');
+    display.textContent = formatted;
+
+    // Toggle active chip styling
+    const allChips = document.querySelectorAll('.chip-preset');
+    allChips.forEach(chip => {
+      chip.classList.remove('bg-primary-container', 'text-on-primary');
+      chip.classList.add('bg-surface-container-low', 'text-on-surface');
+    });
+
+    el.classList.remove('bg-surface-container-low', 'text-on-surface');
+    el.classList.add('bg-primary-container', 'text-on-primary');
+  }
+</script></main>
+</body></html>

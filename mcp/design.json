@@ -1,0 +1,281 @@
+{
+  "schema_version": "1.1",
+  "project": "V4SH",
+  "purpose": "Authoritative visual design system and Android UI implementation constraints.",
+  "authority": {
+    "status": "FROZEN",
+    "principle": "The approved Stitch screens are the visual source of truth. Android implementation should reproduce their visual hierarchy and behavior without treating Stitch HTML as the Android implementation.",
+    "reference_artifact": "warm_editorial_upi",
+    "screen_identity_rule": "Use the screen folder identifier as the authoritative screen identity. Do not rely on inconsistent HTML title metadata."
+  },
+  "brand": {
+    "name": "V4SH",
+    "logo": {
+      "primary_form": "Premium custom V-shaped symbol.",
+      "ordinary_header_placement": "Top-left.",
+      "ordinary_header_rule": "Use the V symbol rather than the full V4SH wordmark.",
+      "full_wordmark_usage": [
+        "About V4SH",
+        "Legal/product-identification contexts",
+        "Other places where explicit product identification is appropriate"
+      ],
+      "centered_v_symbol_in_normal_headers": false
+    },
+    "visual_character": [
+      "Warm Editorial",
+      "Premium fintech utility",
+      "Restrained",
+      "Elegant",
+      "Mature",
+      "Functional rather than decorative"
+    ]
+  },
+  "color_system": {
+    "source": "warm_editorial_upi palette reference supplied by the project.",
+    "primary": {
+      "name": "Primary",
+      "hex": "#3D0C1A",
+      "usage": [
+        "Primary actions",
+        "Brand symbol",
+        "Important active states",
+        "Primary emphasis"
+      ],
+      "tonal_direction": "Deep burgundy family from the reference palette."
+    },
+    "secondary": {
+      "name": "Secondary",
+      "hex": "#8C6A58",
+      "usage": [
+        "Secondary emphasis",
+        "Supporting UI elements",
+        "Warm editorial accents",
+        "Secondary controls where appropriate"
+      ],
+      "tonal_direction": "Warm muted brown/taupe family."
+    },
+    "tertiary": {
+      "name": "Tertiary",
+      "hex": "#FFFFFF",
+      "usage": [
+        "Light surfaces",
+        "Supporting contrast surfaces",
+        "Cards and controls where specified by the approved screen"
+      ]
+    },
+    "neutral": {
+      "name": "Neutral",
+      "hex": "#FFFFFF",
+      "usage": [
+        "Neutral/light UI surfaces",
+        "Background or component surfaces where specified by the approved design"
+      ]
+    },
+    "approved_palette_principle": "The palette is intentionally restrained: deep burgundy is the primary identity color, muted brown is the secondary accent, and white is the neutral/light surface base.",
+    "do_not_invent_primary_colors": true,
+    "dark_theme": {
+      "enabled": false,
+      "rule": "Do not introduce a night/dark theme unless the product specification is explicitly changed."
+    }
+  },
+  "typography": {
+    "direction": "Elegant serif headings paired with clean editorial/body typography.",
+    "headline": {
+      "family": "Bodoni Moda",
+      "role": "Headline / major display typography"
+    },
+    "body": {
+      "family": "IBM Plex Serif",
+      "role": "Body typography"
+    },
+    "label": {
+      "family": "Libre Caslon Text",
+      "role": "Labels and small editorial text"
+    },
+    "implementation_rule": "If the exact reference font is unavailable natively, choose the closest stable Android-compatible equivalent while preserving the reference hierarchy, scale, weight, and editorial character."
+  },
+  "component_reference": {
+    "buttons": {
+      "primary": {
+        "background": "#3D0C1A",
+        "text": "#FFFFFF",
+        "style": "Filled"
+      },
+      "secondary": {
+        "style": "Secondary",
+        "rule": "Use restrained secondary emphasis."
+      },
+      "inverted": {
+        "style": "Inverted",
+        "rule": "Use only where the approved screen requires contrast inversion."
+      },
+      "outlined": {
+        "style": "Outlined",
+        "rule": "Thin, refined outline treatment."
+      }
+    },
+    "search": {
+      "style": "Light neutral field with subtle border.",
+      "rule": "Do not turn search into a dominant visual element."
+    },
+    "bottom_navigation": {
+      "style": "Light rounded navigation surface with four primary destinations.",
+      "tabs": [
+        "HOME",
+        "TRANSACTIONS",
+        "RECEIVE",
+        "PROFILE"
+      ]
+    },
+    "icon_actions": {
+      "style": "Small, restrained icon controls with circular or compact rounded surfaces where appropriate.",
+      "rule": "Icons should support hierarchy rather than become decoration."
+    },
+    "cards": {
+      "style": "Restrained rounded cards with thin borders and soft shadows."
+    }
+  },
+  "layout": {
+    "platform": "Native Android mobile viewport.",
+    "orientation": "Portrait-first.",
+    "principles": [
+      "Clear visual hierarchy",
+      "Generous breathing room",
+      "Consistent horizontal margins",
+      "Strong alignment",
+      "Avoid unnecessary density",
+      "Keep primary actions visually obvious"
+    ],
+    "stitch_canvas_rule": "Desktop-sized Stitch canvas wrappers are reference artifacts only. Native Android screens must use the actual mobile viewport."
+  },
+  "surfaces": {
+    "cards": {
+      "style": "Restrained rounded cards with thin borders and soft shadows.",
+      "rule": "Cards should group related information without turning every element into a floating container."
+    },
+    "borders": {
+      "style": "Thin and subtle.",
+      "purpose": "Separation and hierarchy rather than decoration."
+    },
+    "shadows": {
+      "style": "Soft and restrained.",
+      "rule": "Avoid heavy elevation or exaggerated floating effects."
+    },
+    "corner_treatment": {
+      "style": "Moderately rounded, premium utility aesthetic.",
+      "rule": "Do not use excessive pill-shaped containers unless the approved screen clearly calls for one."
+    }
+  },
+  "navigation": {
+    "bottom_navigation": {
+      "locked": true,
+      "tabs": [
+        "HOME",
+        "TRANSACTIONS",
+        "RECEIVE",
+        "PROFILE"
+      ],
+      "rule": "Do not add, remove, rename, or reorder the four primary tabs without changing the frozen product specification."
+    },
+    "header": {
+      "normal_app_screens": "V-shaped brand symbol at top-left.",
+      "rule": "Do not place a centered V symbol in ordinary screen headers."
+    }
+  },
+  "interaction_design": {
+    "primary_action": {
+      "style": "High-contrast deep burgundy emphasis.",
+      "background": "#3D0C1A",
+      "rule": "One clear primary action per state where practical."
+    },
+    "secondary_action": {
+      "style": "Visually subordinate and warm-toned."
+    },
+    "destructive_or_risk_states": {
+      "rule": "Use clear semantic hierarchy and wording; do not rely on color alone."
+    },
+    "loading": {
+      "rule": "Show an explicit processing state rather than implying success."
+    }
+  },
+  "screen_specific_rules": {
+    "home": {
+      "role": "Primary payment launch surface.",
+      "rule": "Keep scanning/payment initiation prominent and avoid unrelated financial-product features."
+    },
+    "transactions": {
+      "role": "Local V4SH payment record.",
+      "copy_boundary": "Do not visually imply that this is a complete bank statement."
+    },
+    "receive_money": {
+      "role": "Help the user receive money through their existing UPI account.",
+      "rule": "Do not visually imply that V4SH holds a wallet balance."
+    },
+    "profile": {
+      "sections": [
+        "Payment Account",
+        "Security & Privacy",
+        "Help & Support",
+        "About V4SH",
+        "Log Out"
+      ]
+    },
+    "payment_states": {
+      "processing": {
+        "visual_semantics": "Active/waiting state.",
+        "copy": "Payment in progress"
+      },
+      "success": {
+        "visual_semantics": "Definitive success.",
+        "rule": "Use success treatment only after definitive confirmation."
+      },
+      "failed": {
+        "visual_semantics": "Definitive failure.",
+        "badge_text": "Failed",
+        "rule": "Do not use 'Unconfirmed' as the failed-state badge."
+      },
+      "unknown": {
+        "visual_semantics": "Payment outcome cannot currently be determined.",
+        "rule": "Make the uncertainty prominent and do not visually encourage immediate repayment."
+      },
+      "cancelled": {
+        "visual_semantics": "User stopped before payment initiation.",
+        "rule": "Do not imply that V4SH cancelled an already initiated bank transaction."
+      }
+    },
+    "no_mobile_network": {
+      "role": "Pre-initiation runtime state.",
+      "copy": "No mobile network",
+      "rule": "Distinguish network availability from payment success/readiness."
+    }
+  },
+  "content_rules": {
+    "network": {
+      "preferred": "Mobile network available.",
+      "avoid": "Payment is ready simply because a mobile network is available."
+    },
+    "processing": {
+      "preferred_action": "Stop waiting",
+      "explanation": "This only stops V4SH from waiting on this screen. It does not cancel a payment that may already have been initiated."
+    },
+    "unknown": {
+      "preferred_warning": "Don't pay again yet.",
+      "primary_action": "Check Payment Status",
+      "secondary_action": "View Transactions"
+    },
+    "transactions": {
+      "preferred_label": "Payments initiated through V4SH",
+      "rule": "Present this as a local V4SH record, not a complete bank statement."
+    }
+  },
+  "implementation_constraints": [
+    "Implement the approved mobile layouts natively in Jetpack Compose/Material 3.",
+    "Treat Stitch HTML as visual reference only; do not directly ship the exported HTML.",
+    "Do not introduce a desktop wrapper into the native Android UI.",
+    "Preserve the approved palette and typography hierarchy.",
+    "Do not replace the deep burgundy primary with arbitrary Material defaults.",
+    "Do not add a dark theme.",
+    "Do not add wallet, rewards, offers, bills, recharge, loans, investments, social, or other unapproved financial features.",
+    "Do not replace the V-symbol header treatment with a full wordmark on ordinary screens."
+  ]
+}

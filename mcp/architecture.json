@@ -1,0 +1,336 @@
+{
+  "schema_version": "1.0",
+  "project": "V4SH",
+  "purpose": "Authoritative Android architecture and implementation-boundary specification for V4SH.",
+  "authority": {
+    "status": "FROZEN",
+    "principle": "Antigravity may implement and refine code within these boundaries, but must not silently change product behavior, payment semantics, security rules, or navigation contracts."
+  },
+  "platform": {
+    "app_type": "Native Android",
+    "language": "Kotlin",
+    "ui": "Jetpack Compose",
+    "design_system": "Material 3 adapted to the frozen V4SH design system",
+    "architecture_pattern": "MVVM",
+    "min_sdk": 26
+  },
+  "core_stack": {
+    "ui": "Jetpack Compose",
+    "design_components": "Material 3",
+    "navigation": "Jetpack Navigation Compose",
+    "local_database": "Room",
+    "camera": "CameraX",
+    "qr_processing": "ML Kit / Android-compatible QR decoding",
+    "network_and_telephony": "Android platform Telephony APIs where required",
+    "payment_access": "Android AccessibilityService boundary for the proven USSD automation prototype",
+    "build": "Gradle",
+    "version_control": "Git/GitHub"
+  },
+  "layers": {
+    "presentation": {
+      "responsibilities": [
+        "Compose screens",
+        "UI state rendering",
+        "User interaction handling",
+        "Navigation events",
+        "Loading/error/success state presentation"
+      ],
+      "must_not": [
+        "Contain payment automation logic",
+        "Directly manipulate AccessibilityService",
+        "Directly write Room database records",
+        "Decide whether a payment is SUCCESS, FAILED, UNKNOWN, or CANCELLED"
+      ]
+    },
+    "viewmodel": {
+      "responsibilities": [
+        "Expose immutable UI state",
+        "Receive user intents",
+        "Coordinate use cases",
+        "Handle screen-level state transitions",
+        "Survive configuration changes where appropriate"
+      ],
+      "must_not": [
+        "Contain raw accessibility-tree traversal",
+        "Contain large blocks of QR parsing logic",
+        "Become a general-purpose repository",
+        "Store sensitive credentials"
+      ]
+    },
+    "domain": {
+      "responsibilities": [
+        "Payment state machine",
+        "Payment lifecycle rules",
+        "QR recipient validation rules",
+        "Amount/review validation",
+        "Transaction status semantics",
+        "Use cases coordinating payment operations"
+      ],
+      "must_not": [
+        "Depend directly on Compose UI classes",
+        "Render UI",
+        "Capture or store UPI PIN, OTP, bank passwords, card PIN, or CVV"
+      ]
+    },
+    "data": {
+      "responsibilities": [
+        "Room entities and DAOs",
+        "Local transaction records",
+        "Local preferences/settings",
+        "Mapping between persistence models and domain models"
+      ],
+      "must_not": [
+        "Invent transaction references",
+        "Store payment credentials",
+        "Represent local history as a bank statement"
+      ]
+    },
+    "payment_engine": {
+      "responsibilities": [
+        "Coordinate the proven payment sequence",
+        "Track payment-engine state",
+        "Classify payment interface responses",
+        "Stop safely on sensitive or unknown screens",
+        "Surface definitive success/failure or UNKNOWN to the domain layer"
+      ],
+      "boundary": "The payment engine must be isolated behind an interface so the rest of the app does not depend directly on AccessibilityService implementation details."
+    },
+    "platform_access": {
+      "responsibilities": [
+        "AccessibilityService integration",
+        "SIM selection and telephony checks",
+        "Camera permission/camera integration",
+        "Android settings intents required for setup"
+      ],
+      "rule": "Platform-specific mechanisms remain behind interfaces/adapters wherever practical."
+    }
+  },
+  "recommended_package_structure": {
+    "root": "com.festpay.app",
+    "packages": [
+      "ui",
+      "ui.navigation",
+      "ui.screens",
+      "ui.components",
+      "ui.theme",
+      "domain.model",
+      "domain.usecase",
+      "domain.payment",
+      "data.local",
+      "data.repository",
+      "data.preferences",
+      "payment",
+      "payment.accessibility",
+      "payment.classifier",
+      "payment.state",
+      "platform.telephony",
+      "platform.camera",
+      "setup",
+      "security"
+    ],
+    "note": "The existing package name may remain com.festpay.app during implementation unless the project explicitly performs a controlled rename. Product branding remains V4SH."
+  },
+  "payment_architecture": {
+    "interface": "PaymentEngine",
+    "responsibility": "Expose a product-level payment operation without leaking AccessibilityService details into UI.",
+    "proven_flow": [
+      "Start *99#",
+      "Detect INITIAL_MENU",
+      "Select Send Money",
+      "Detect SEND_MONEY_METHOD_MENU",
+      "Select UPI ID",
+      "Detect UPI_ID_INPUT",
+      "Enter non-sensitive UPI ID",
+      "Wait for payment-interface response",
+      "Handle sensitive authentication boundary",
+      "Await definitive result"
+    ],
+    "state_machine": [
+      "IDLE",
+      "USSD_DETECTED",
+      "INPUT_ENTERED",
+      "SUBMITTING",
+      "WAITING_RESPONSE",
+      "PROCESSING",
+      "SUCCESS",
+      "FAILED",
+      "UNKNOWN",
+      "CANCELLED"
+    ],
+    "critical_rule": "The UI must not infer payment outcome from timeout, screen disappearance, or network loss. PaymentEngine/domain logic must determine the correct state using available evidence."
+  },
+  "accessibility_architecture": {
+    "service": "FestPayAccessibilityService",
+    "role": "Platform adapter for the payment-access prototype.",
+    "rules": [
+      "Classify the current screen before acting.",
+      "Use a single-pass traversal where practical.",
+      "Avoid repeated recursive accessibility-tree scans.",
+      "Stop automation on PIN_OR_SENSITIVE.",
+      "Stop automation on NON_ACTIONABLE or unknown screens.",
+      "Never enter UPI PIN or OTP.",
+      "Never write arbitrary values into arbitrary editable fields.",
+      "Do not automate unrelated applications or screens."
+    ],
+    "classification_contract": [
+      "INITIAL_MENU",
+      "SEND_MONEY_METHOD_MENU",
+      "UPI_ID_INPUT",
+      "PIN_OR_SENSITIVE",
+      "NON_ACTIONABLE"
+    ],
+    "boundary": "AccessibilityService emits classified events/results to the payment engine; business UI must not traverse the accessibility tree directly."
+  },
+  "qr_architecture": {
+    "pipeline": [
+      "CameraX preview",
+      "QR detection/decoding",
+      "UPI payload parsing",
+      "Recipient validation",
+      "QR Recipient screen",
+      "Amount Entry",
+      "Review Payment",
+      "Payment Engine"
+    ],
+    "rule": "Scanning and parsing a QR does not itself initiate a payment.",
+    "errors_before_initiation": [
+      "CAMERA_ACCESS_REQUIRED",
+      "QR_CODE_NOT_RECOGNIZED",
+      "UNSUPPORTED_QR_CODE",
+      "PAYMENT_DETAILS_MISSING",
+      "NO_MOBILE_NETWORK"
+    ]
+  },
+  "navigation_architecture": {
+    "primary_tabs": [
+      "HOME",
+      "TRANSACTIONS",
+      "RECEIVE",
+      "PROFILE"
+    ],
+    "navigation_source": "navigation.json",
+    "rule": "Navigation destinations and terminal-state semantics must remain consistent with navigation.json."
+  },
+  "local_storage": {
+    "room": {
+      "purpose": "Local V4SH transaction history.",
+      "minimum_record": [
+        "local_record_id",
+        "timestamp",
+        "amount",
+        "payee_display_name_or_identifier",
+        "status"
+      ],
+      "reference_id": "Persist only when actually available.",
+      "not_a_bank_statement": true
+    },
+    "preferences": {
+      "appropriate_for": [
+        "Selected payment SIM",
+        "Non-sensitive setup completion state",
+        "User interface preferences that are actually implemented"
+      ],
+      "forbidden": [
+        "UPI PIN",
+        "OTP",
+        "Bank password",
+        "Card PIN",
+        "CVV"
+      ]
+    }
+  },
+  "setup_architecture": {
+    "first_time_flow": [
+      "WELCOME_SETUP",
+      "PAYMENT_READINESS",
+      "PAYMENT_ACCESS_SETUP",
+      "PAYMENT_SIM_SELECTION",
+      "HOME"
+    ],
+    "preconditions_are_independent": [
+      "Cellular/network availability",
+      "SIM selection",
+      "Payment access",
+      "UPI/payment account availability",
+      "Camera access where QR scanning is used"
+    ],
+    "rule": "Do not collapse independent prerequisites into a single false 'ready' condition."
+  },
+  "security_boundaries": {
+    "sensitive_credentials": [
+      "UPI PIN",
+      "OTP",
+      "Bank password",
+      "Card PIN",
+      "CVV"
+    ],
+    "rule": "These must never enter V4SH application state, local database, debug logs, or application-owned transport.",
+    "accessibility_policy": "AccessibilityService is a prototype/feasibility mechanism and must not be assumed to be Play Store compliant without separate policy validation."
+  },
+  "testing_architecture": {
+    "unit_tests": [
+      "Payment state transitions",
+      "QR payload validation",
+      "Amount validation",
+      "Transaction status mapping",
+      "Navigation transition contracts"
+    ],
+    "instrumentation_tests": [
+      "Critical Compose navigation",
+      "Setup flow",
+      "QR flow",
+      "Transaction history rendering"
+    ],
+    "device_tests": [
+      "USSD detection",
+      "SIM selection",
+      "AccessibilityService lifecycle",
+      "Real QR scanning",
+      "Network loss handling",
+      "Payment terminal states"
+    ],
+    "safety_tests": [
+      "PIN screen causes automation stop",
+      "Unknown screen causes automation stop",
+      "No arbitrary editable field receives payment input",
+      "UNKNOWN never exposes immediate retry",
+      "No credential is persisted or logged"
+    ]
+  },
+  "implementation_rules_for_antigravity": {
+    "allowed": [
+      "Create/refactor Kotlin classes within the defined architecture.",
+      "Implement Compose screens matching the frozen design system.",
+      "Implement repositories, use cases, state holders, and tests.",
+      "Improve code quality without changing product semantics.",
+      "Run builds/tests and fix implementation defects.",
+      "Use official Android documentation when platform behavior is uncertain."
+    ],
+    "must_ask_or_flag_before_changing": [
+      "Payment state semantics",
+      "Navigation contract",
+      "Security boundaries",
+      "Credential handling",
+      "Product scope",
+      "Frozen visual design system",
+      "Payment initiation semantics"
+    ],
+    "forbidden": [
+      "Inventing payment success.",
+      "Automatically retrying an UNKNOWN payment.",
+      "Capturing or storing UPI PIN/OTP.",
+      "Adding a wallet or V4SH balance.",
+      "Adding merchant onboarding or proprietary QR infrastructure.",
+      "Replacing the frozen navigation with a new information architecture.",
+      "Adding unapproved financial features.",
+      "Treating Stitch HTML as production Android code."
+    ]
+  },
+  "source_of_truth_files": [
+    "screens.json",
+    "navigation.json",
+    "payment.json",
+    "security.json",
+    "design.json"
+  ]
+}

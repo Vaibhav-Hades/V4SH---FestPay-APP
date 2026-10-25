@@ -1,0 +1,188 @@
+{
+  "schema_version": "1.0",
+  "project": "V4SH",
+  "purpose": "Authoritative product definition, scope boundary, target use case, capabilities, exclusions, and product principles.",
+  "authority": {
+    "status": "FROZEN",
+    "principle": "Implementation must serve the defined V4SH product. New product capabilities must not be introduced merely because they are technically possible."
+  },
+  "identity": {
+    "name": "V4SH",
+    "name_rule": "The numeral 4 in V4SH is intentional and permanent unless the product specification is explicitly changed.",
+    "category": "Lightweight festival payment interface"
+  },
+  "problem": {
+    "context": "Crowded college festivals can have unreliable mobile internet and payment friction.",
+    "core_problem": "Users need a simple way to initiate real UPI payments through existing payment rails without requiring stalls to install or change their payment setup."
+  },
+  "core_promise": {
+    "statement": "V4SH provides a lightweight interface for initiating payments through existing UPI/USSD rails.",
+    "principles": [
+      "Use existing bank/UPI payment infrastructure.",
+      "Keep the user flow simple.",
+      "Avoid requiring merchant-side V4SH infrastructure.",
+      "Avoid creating a closed-loop wallet.",
+      "Make payment uncertainty explicit rather than pretending a payment succeeded."
+    ]
+  },
+  "target_environment": {
+    "primary": "College festivals and other crowded event environments.",
+    "constraints": [
+      "Mobile internet may be unreliable.",
+      "Cellular/mobile network availability may still be required for the underlying payment communication.",
+      "Users may encounter standard UPI QR codes at stalls.",
+      "Multiple SIM devices may require an explicit payment-SIM choice."
+    ]
+  },
+  "core_capabilities": {
+    "pay": {
+      "description": "Initiate a payment through the supported existing payment rail.",
+      "proven_payment_path": [
+        "*99#",
+        "Send Money",
+        "UPI ID",
+        "Enter UPI ID"
+      ]
+    },
+    "scan_qr": {
+      "description": "Scan standard UPI QR codes and use parsed payment details to prepare a payment.",
+      "proprietary_qr": false
+    },
+    "receive": {
+      "description": "Help the user receive payments through their existing UPI account.",
+      "wallet": false
+    },
+    "transactions": {
+      "description": "Show local V4SH records of payments initiated through V4SH.",
+      "complete_bank_statement": false
+    },
+    "profile": {
+      "description": "Provide payment-account, security/privacy, help/support, about, and logout areas."
+    }
+  },
+  "merchant_model": {
+    "merchant_app_required": false,
+    "merchant_onboarding_required": false,
+    "stall_setup_change_required": false,
+    "proprietary_v4sh_qr_required": false,
+    "principle": "A stall should be able to continue using its existing UPI payment setup."
+  },
+  "payment_model": {
+    "uses_existing_rails": true,
+    "wallet": false,
+    "v4sh_balance": false,
+    "payment_credentials_owned_by_v4sh": false,
+    "upi_pin_captured_by_v4sh": false,
+    "otp_captured_by_v4sh": false,
+    "success_definition": "Definitive payment confirmation.",
+    "failure_definition": "Definitive payment failure.",
+    "unknown_definition": "Payment may have been initiated but final outcome cannot be determined.",
+    "cancelled_definition": "User stopped the flow before payment initiation."
+  },
+  "connectivity_model": {
+    "important_distinction": "Mobile network availability is not the same thing as payment success or payment readiness.",
+    "no_mobile_network": {
+      "is_pre_initiation": true,
+      "destructive": false
+    },
+    "after_initiation": {
+      "network_loss_may_result_in": "UNKNOWN",
+      "must_not_auto_classify_as": [
+        "FAILED",
+        "CANCELLED"
+      ]
+    }
+  },
+  "user_experience": {
+    "primary_navigation": [
+      "HOME",
+      "TRANSACTIONS",
+      "RECEIVE",
+      "PROFILE"
+    ],
+    "design_direction": "Warm Editorial",
+    "brand_primary": "#3D0C1A",
+    "brand_secondary": "#8C6A58",
+    "background_direction": "Light editorial/neutral surfaces.",
+    "tone": [
+      "Premium",
+      "Calm",
+      "Clear",
+      "Trustworthy",
+      "Functional"
+    ]
+  },
+  "first_time_setup": {
+    "flow": [
+      "Welcome & Setup",
+      "Payment Readiness",
+      "Payment Access Setup",
+      "Payment SIM Selection",
+      "Home"
+    ],
+    "principle": "Independent prerequisites should be represented independently rather than hidden behind a false single readiness claim."
+  },
+  "scope_in": [
+    "Standard UPI QR scanning.",
+    "Supported UPI ID payment preparation.",
+    "Existing UPI/USSD payment flow.",
+    "Payment access setup.",
+    "Payment SIM selection.",
+    "Local transaction history.",
+    "Receive-money information using the user's existing UPI identity.",
+    "Security and privacy controls that are actually implemented.",
+    "Help and support."
+  ],
+  "scope_out": [
+    "V4SH wallet.",
+    "V4SH balance.",
+    "Closed-loop festival currency.",
+    "Proprietary V4SH QR codes.",
+    "Merchant app.",
+    "Merchant onboarding.",
+    "Merchant-side infrastructure changes.",
+    "IMPS.",
+    "NEFT.",
+    "Rewards.",
+    "Offers.",
+    "Bills and recharge.",
+    "Loans.",
+    "Investments.",
+    "Social/payment-feed features.",
+    "Unapproved financial-product features.",
+    "Capturing UPI PIN.",
+    "Capturing OTP.",
+    "Capturing bank passwords.",
+    "Capturing card PIN or CVV."
+  ],
+  "trust_principles": [
+    "Never claim success without definitive confirmation.",
+    "Never label an uncertain payment as failed merely because the app timed out.",
+    "Never encourage a second payment when the first payment may already have been initiated.",
+    "Never claim V4SH cancelled a bank/UPI transaction when it only stopped waiting.",
+    "Never invent a transaction/reference ID.",
+    "Never present local V4SH history as a complete bank statement.",
+    "Never make security or privacy claims that are not implemented."
+  ],
+  "product_principles": [
+    "Existing payment rails over new payment infrastructure.",
+    "Minimal merchant friction.",
+    "Local-first where appropriate.",
+    "Explicit state and uncertainty.",
+    "Security over convenience.",
+    "Small focused product surface.",
+    "Reliable behavior over feature count."
+  ],
+  "implementation_boundary": {
+    "source_of_truth": [
+      "product.json",
+      "screens.json",
+      "navigation.json",
+      "payment.json",
+      "security.json",
+      "design.json",
+      "architecture.json"
+    ],
+    "rule": "If a proposed feature conflicts with these frozen boundaries, flag the conflict before implementation rather than silently expanding scope."
+  }
+}

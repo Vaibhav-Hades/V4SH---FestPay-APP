@@ -1,0 +1,212 @@
+{
+  "schema_version": "1.0",
+  "project": "V4SH",
+  "purpose": "Authoritative security, privacy, credential-handling, and payment-access boundaries for Android implementation.",
+  "authority": {
+    "status": "FROZEN",
+    "principle": "Security behavior must be enforced by implementation and must not be weakened for convenience."
+  },
+  "credential_boundary": {
+    "v4sh_must_never_capture": [
+      "UPI PIN",
+      "OTP",
+      "bank password",
+      "card PIN",
+      "CVV"
+    ],
+    "v4sh_must_never_store": [
+      "UPI PIN",
+      "OTP",
+      "bank password",
+      "card PIN",
+      "CVV"
+    ],
+    "v4sh_must_never_log": [
+      "UPI PIN",
+      "OTP",
+      "bank password",
+      "card PIN",
+      "CVV"
+    ],
+    "v4sh_must_never_transmit": [
+      "UPI PIN",
+      "OTP",
+      "bank password",
+      "card PIN",
+      "CVV"
+    ],
+    "rule": "Sensitive authentication must remain outside V4SH-controlled data and UI handling."
+  },
+  "accessibility_service": {
+    "purpose": "Prototype/feasibility mechanism for interacting with the proven USSD payment interface.",
+    "policy_boundary": "AccessibilityService must not be treated as a general-purpose automation permission or assumed to be Play Store compliant without separate policy validation.",
+    "allowed_behavior": [
+      "Detect and classify the expected USSD payment interface.",
+      "Automate only proven non-sensitive navigation/input.",
+      "Enter only explicitly approved non-sensitive values into the expected USSD flow.",
+      "Stop when a PIN or other sensitive screen is detected.",
+      "Stop when the screen is unknown or non-actionable."
+    ],
+    "forbidden_behavior": [
+      "Entering UPI PIN.",
+      "Entering OTP.",
+      "Capturing sensitive credentials.",
+      "Writing arbitrary values into arbitrary editable fields.",
+      "Automating unrelated apps or unrelated screens.",
+      "Continuing automation after a sensitive screen is detected.",
+      "Treating an unknown screen as an actionable payment screen."
+    ],
+    "screen_classification": {
+      "required": true,
+      "principle": "Classify before acting.",
+      "minimum_classes": [
+        "INITIAL_MENU",
+        "SEND_MONEY_METHOD_MENU",
+        "UPI_ID_INPUT",
+        "PIN_OR_SENSITIVE",
+        "NON_ACTIONABLE"
+      ]
+    }
+  },
+  "payment_access_setup": {
+    "purpose": "Explicitly establish whether required payment access is ready before a payment attempt.",
+    "states": [
+      "READY",
+      "NEEDS_SETUP"
+    ],
+    "needs_setup_action": "Open Android settings.",
+    "rule": "The UI must not claim payment access is ready unless the required system capability is actually available."
+  },
+  "device_security": {
+    "rule": "Use only security claims that are actually implemented.",
+    "device_authentication": {
+      "allowed_copy_if_implemented": "Use your device's screen lock to protect access to V4SH.",
+      "do_not_claim_as_active_without_implementation": "Require device authentication every time V4SH opens."
+    },
+    "secrets": {
+      "do_not_hardcode": true,
+      "do_not_commit": [
+        "API keys",
+        "private keys",
+        "passwords",
+        "payment credentials",
+        "signing secrets"
+      ]
+    }
+  },
+  "privacy": {
+    "principle": "Local-first and minimal local data.",
+    "allowed_claim": "V4SH keeps its local payment records on the device unless a separately implemented feature explicitly states otherwise.",
+    "forbidden_unverified_claims": [
+      "Zero Cloud Telemetry",
+      "We never collect any data",
+      "Bank-grade encryption",
+      "Fully anonymous",
+      "100% secure"
+    ],
+    "rule": "Privacy copy must match actual implementation. Do not promise infrastructure or behavior that has not been built and verified."
+  },
+  "transaction_data": {
+    "local_record_only": true,
+    "purpose": "Provide a useful V4SH history of payments initiated through V4SH.",
+    "not_a_bank_statement": true,
+    "reference_id": {
+      "rule": "Persist/display only when actually supplied by the payment flow.",
+      "inventing_ids": false
+    },
+    "sensitive_data_minimization": [
+      "Store only information required for the local transaction record.",
+      "Do not store authentication credentials.",
+      "Do not store raw accessibility-tree dumps as transaction history."
+    ]
+  },
+  "network_and_sim": {
+    "network": {
+      "wording": "Mobile network available.",
+      "important": "Network availability is not proof of payment readiness or payment success."
+    },
+    "no_network": {
+      "state": "NO_MOBILE_NETWORK",
+      "message": "V4SH needs a mobile network connection to communicate with the payment service.",
+      "safe_before_initiation": true
+    },
+    "dual_sim": {
+      "rule": "If multiple SIMs are available, the user must explicitly select the preferred payment SIM.",
+      "single_sim": "A single available SIM may be selected automatically.",
+      "do_not": [
+        "Silently switch the user's chosen payment SIM during an active payment.",
+        "Claim a SIM is payment-ready without checking the required capability."
+      ]
+    }
+  },
+  "app_permissions": {
+    "principle": "Request only permissions required for an actual feature.",
+    "camera": {
+      "purpose": "QR scanning.",
+      "request_timing": "When QR scanning is initiated or during setup if the product flow requires it."
+    },
+    "network": {
+      "important": "Mobile network availability is not an Android runtime permission."
+    },
+    "accessibility": {
+      "purpose": "Payment-access mechanism for the prototype/implementation.",
+      "user_control": "User explicitly enables it through Android settings."
+    }
+  },
+  "payment_safety": {
+    "confirmation_rules": [
+      "SUCCESS requires definitive confirmation.",
+      "FAILED requires definitive failure.",
+      "UNKNOWN must be used when payment may have been initiated but final status cannot be determined.",
+      "CANCELLED is valid only when the user stopped before payment initiation."
+    ],
+    "unknown_state": {
+      "warning": "Don't pay again yet.",
+      "primary_action": "Check Payment Status",
+      "secondary_action": "View Transactions",
+      "immediate_retry": false
+    },
+    "processing": {
+      "user_action": "Stop waiting",
+      "meaning": "Stop V4SH from waiting on the current screen.",
+      "does_not_cancel_bank_transaction": true
+    }
+  },
+  "logging_and_debugging": {
+    "rule": "Debug logs must never expose payment credentials or sensitive authentication data.",
+    "safe_to_log": [
+      "Non-sensitive state-machine transitions.",
+      "Screen classification labels.",
+      "Non-sensitive error categories.",
+      "Local record identifiers that contain no credential material."
+    ],
+    "unsafe_to_log": [
+      "UPI PIN",
+      "OTP",
+      "Bank passwords",
+      "Card PIN",
+      "CVV",
+      "Raw sensitive input values"
+    ]
+  },
+  "security_validation": {
+    "required_checks": [
+      "No credential fields exist in V4SH payment data models.",
+      "No UPI PIN is passed into application state.",
+      "No OTP is passed into application state.",
+      "No sensitive value is written to logs.",
+      "Accessibility automation stops on PIN/sensitive screens.",
+      "Unknown payment status does not expose immediate retry.",
+      "Transaction references are never fabricated.",
+      "Security/privacy UI claims match implemented behavior."
+    ]
+  },
+  "implementation_constraints": [
+    "Security rules take precedence over convenience.",
+    "Never weaken PIN/OTP boundaries to make automation appear more complete.",
+    "Never use AccessibilityService as a reason to capture credentials.",
+    "Never store credentials for later payment.",
+    "Never present a local V4SH transaction record as a bank statement.",
+    "Never make unsupported privacy or security guarantees."
+  ]
+}

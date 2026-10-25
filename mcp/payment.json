@@ -1,0 +1,209 @@
+{
+  "schema_version": "1.0",
+  "project": "V4SH",
+  "purpose": "Authoritative payment lifecycle and safety specification for Android implementation.",
+  "authority": {
+    "status": "FROZEN",
+    "rules": [
+      "Payment state semantics are authoritative.",
+      "UI must reflect the payment state; UI must not redefine payment truth.",
+      "No payment credential capture or storage.",
+      "No invented bank transaction/reference identifiers.",
+      "Do not treat mobile-network availability as proof that a payment will succeed."
+    ]
+  },
+  "product_boundaries": {
+    "payment_rail": "Existing UPI/USSD payment rails.",
+    "wallet": false,
+    "v4sh_wallet_balance": false,
+    "proprietary_v4sh_qr": false,
+    "merchant_app_required": false,
+    "merchant_onboarding_required": false,
+    "stall_payment_setup_change_required": false,
+    "payment_path_proven_in_prototype": [
+      "*99#",
+      "Send Money",
+      "UPI ID",
+      "Enter UPI ID"
+    ]
+  },
+  "preconditions": {
+    "cellular_network": {
+      "required": true,
+      "meaning": "An available mobile network connection is required for payment communication.",
+      "availability_does_not_mean_payment_success": true
+    },
+    "payment_sim": {
+      "required": true,
+      "rule": "If multiple SIMs are available, the user must select the preferred payment SIM. If only one SIM is available, it may be selected automatically."
+    },
+    "payment_access": {
+      "required": true,
+      "meaning": "Required payment-access/automation setup must be ready before attempting the payment flow."
+    },
+    "camera": {
+      "required_for": [
+        "QR_PAYMENT"
+      ],
+      "meaning": "Camera access is required only for QR scanning."
+    },
+    "credentials": {
+      "v4sh_must_not_capture": [
+        "UPI PIN",
+        "OTP",
+        "bank password",
+        "card PIN",
+        "CVV"
+      ]
+    }
+  },
+  "payment_lifecycle": {
+    "states": [
+      "IDLE",
+      "USSD_DETECTED",
+      "INPUT_ENTERED",
+      "SUBMITTING",
+      "WAITING_RESPONSE",
+      "PROCESSING",
+      "SUCCESS",
+      "FAILED",
+      "UNKNOWN",
+      "CANCELLED"
+    ],
+    "state_definitions": {
+      "IDLE": "No payment is currently being attempted.",
+      "USSD_DETECTED": "The payment interface has been detected and classified as an actionable USSD payment screen.",
+      "INPUT_ENTERED": "The required non-sensitive payment input has been entered.",
+      "SUBMITTING": "V4SH is submitting the current non-sensitive step to the payment interface.",
+      "WAITING_RESPONSE": "V4SH is waiting for the next payment-interface response.",
+      "PROCESSING": "A payment attempt may have been initiated and V4SH is waiting for definitive confirmation.",
+      "SUCCESS": "Definitive payment confirmation has been received.",
+      "FAILED": "The underlying payment attempt has definitively failed.",
+      "UNKNOWN": "A payment may have been initiated, but V4SH cannot determine the final outcome.",
+      "CANCELLED": "The user stopped the flow before payment initiation."
+    }
+  },
+  "terminal_state_rules": {
+    "SUCCESS": {
+      "requires": "Definitive confirmation.",
+      "allowed_actions": [
+        "DONE",
+        "VIEW_TRANSACTION",
+        "SHARE_RECEIPT"
+      ]
+    },
+    "FAILED": {
+      "requires": "Definitive failure.",
+      "ui_label": "Failed",
+      "retry_rule": "Retry may be offered only when the failure is definitively known and retry is otherwise safe."
+    },
+    "UNKNOWN": {
+      "meaning": "Payment status unclear; payment may already have been initiated.",
+      "warning": "Do not pay again yet.",
+      "primary_action": "CHECK_PAYMENT_STATUS",
+      "secondary_action": "VIEW_TRANSACTIONS",
+      "immediate_retry": false
+    },
+    "CANCELLED": {
+      "requires": "User stopped the flow before payment initiation.",
+      "important": "Stopping V4SH after initiation must not be represented as cancellation of the bank/UPI transaction."
+    }
+  },
+  "processing_rules": {
+    "message": "Payment is in progress. Waiting for payment confirmation. Please don't press Pay again or close the app.",
+    "user_stop_action": {
+      "label": "Stop waiting",
+      "meaning": "Stops V4SH from waiting on the current screen.",
+      "does_not_mean": "It does not cancel a payment that may already have been initiated.",
+      "post_action_state_if_initiated": "UNKNOWN"
+    },
+    "do_not_auto_classify_as_failed": [
+      "Network loss after payment initiation",
+      "Timeout without definitive failure",
+      "App leaving the processing screen without definitive bank/payment confirmation"
+    ]
+  },
+  "network_rules": {
+    "no_mobile_network": {
+      "timing": "Pre-initiation",
+      "destructive": false,
+      "message": "V4SH needs a mobile network connection to communicate with the payment service.",
+      "actions": [
+        "CHECK_CONNECTION",
+        "TRY_AGAIN"
+      ]
+    },
+    "network_loss_after_initiation": {
+      "rule": "Do not automatically mark the payment FAILED or CANCELLED.",
+      "possible_state": "UNKNOWN"
+    }
+  },
+  "qr_payment": {
+    "flow": [
+      "QR_SCANNER",
+      "QR_RECIPIENT",
+      "AMOUNT_ENTRY",
+      "REVIEW_PAYMENT",
+      "PROCESSING"
+    ],
+    "validation_errors_are_pre_initiation": true,
+    "supported_entry_principle": "Scan standard UPI QR codes; V4SH does not require a proprietary V4SH QR.",
+    "pre_initiation_errors": [
+      "CAMERA_ACCESS_REQUIRED",
+      "QR_CODE_NOT_RECOGNIZED",
+      "UNSUPPORTED_QR_CODE",
+      "PAYMENT_DETAILS_MISSING",
+      "NO_MOBILE_NETWORK"
+    ],
+    "rule": "No payment is considered initiated merely because a QR code was scanned or recipient details were parsed."
+  },
+  "ussd_automation": {
+    "purpose": "Automate only the non-sensitive navigation/input required by the proven payment path.",
+    "proven_sequence": [
+      "*99#",
+      "Send Money",
+      "UPI ID",
+      "UPI ID input"
+    ],
+    "safety_rules": [
+      "Never enter or automate a UPI PIN.",
+      "Never enter OTPs or other sensitive credentials.",
+      "Classify the current screen before acting.",
+      "Do not write arbitrary values into arbitrary editable fields.",
+      "Stop automation on PIN or sensitive screens.",
+      "Stop automation on unknown/non-actionable screens.",
+      "Avoid repeated tree scans and unnecessary recursive accessibility traversal."
+    ],
+    "state_machine_boundary": {
+      "before_sensitive_input": "V4SH may automate the proven non-sensitive navigation steps.",
+      "sensitive_step": "The user must complete the sensitive authentication step through the appropriate system/payment interface; V4SH must not capture or inject the credential."
+    }
+  },
+  "transaction_record": {
+    "purpose": "Maintain a local V4SH record of payments initiated through V4SH.",
+    "truth_label": "Payments initiated through V4SH",
+    "not_a_bank_statement": true,
+    "reference_id": {
+      "rule": "Show a reference ID only when one is actually available from the payment flow.",
+      "do_not_invent": true
+    },
+    "minimum_record_fields": [
+      "local_record_id",
+      "timestamp",
+      "amount",
+      "payee_display_name_or_identifier",
+      "status"
+    ]
+  },
+  "implementation_constraints": [
+    "Do not build a wallet or internal V4SH balance.",
+    "Do not add merchant onboarding or merchant-side V4SH infrastructure.",
+    "Do not introduce a proprietary V4SH QR format.",
+    "Do not claim cancellation of an already initiated bank/UPI transaction.",
+    "Do not expose Retry Payment as the immediate action for UNKNOWN.",
+    "Do not mark UNKNOWN as FAILED without definitive evidence.",
+    "Do not mark a payment SUCCESS without definitive confirmation.",
+    "Do not store or transmit UPI PIN, OTP, bank passwords, card PINs, or CVV.",
+    "Do not fabricate transaction IDs or bank references."
+  ]
+}

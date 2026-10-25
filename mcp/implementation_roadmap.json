@@ -1,0 +1,316 @@
+{
+  "schema_version": "1.0",
+  "project": "V4SH",
+  "purpose": "Authoritative implementation sequence, phase gates, deliverables, and validation criteria for building V4SH.",
+  "authority": {
+    "status": "FROZEN",
+    "rule": "Build in phase order. Do not skip a validation gate merely to reach later UI or payment work faster."
+  },
+  "implementation_strategy": {
+    "principle": "Build the smallest verifiable system first, then expand.",
+    "primary_loop": "Implement -> build -> test -> inspect on real device -> fix -> validate -> continue.",
+    "design_rule": "Use the approved Stitch screens as visual references while implementing native Android Compose screens."
+  },
+  "phases": [
+    {
+      "id": 0,
+      "name": "Spec and Feasibility Lock",
+      "goal": "Ensure the project has one authoritative product, design, navigation, security, payment, and architecture contract.",
+      "deliverables": [
+        "All MCP specification JSON files present.",
+        "Existing Android project builds.",
+        "Proven USSD payment path documented.",
+        "AccessibilityService feasibility understood.",
+        "No credential-capture requirement exists."
+      ],
+      "gate": "Do not begin broad implementation until all source-of-truth specifications are available and internally referenced."
+    },
+    {
+      "id": 1,
+      "name": "Android Foundation",
+      "goal": "Establish a clean native Android foundation matching the architecture specification.",
+      "deliverables": [
+        "Kotlin project builds.",
+        "Jetpack Compose and Material 3 configured.",
+        "MVVM package structure established.",
+        "Navigation shell established.",
+        "Theme tokens established from design.json.",
+        "Room foundation established.",
+        "Baseline unit/instrumentation test setup established."
+      ],
+      "validation": [
+        "Gradle build succeeds.",
+        "App launches on the Redmi Note 13 Pro+ test device.",
+        "No architecture-boundary violations."
+      ],
+      "gate": "Only continue when the app launches reliably on the physical test device."
+    },
+    {
+      "id": 2,
+      "name": "UI and Navigation",
+      "goal": "Implement the frozen screen catalog and navigation contract without payment automation.",
+      "deliverables": [
+        "First-time setup flow.",
+        "Home.",
+        "Transactions.",
+        "Receive Money.",
+        "Profile.",
+        "UPI Details.",
+        "Security.",
+        "Privacy.",
+        "Help Center.",
+        "Contact Support.",
+        "QR Scanner.",
+        "QR Recipient.",
+        "Amount Entry.",
+        "Review Payment.",
+        "Payment state screens.",
+        "QR error screens.",
+        "Transaction Details."
+      ],
+      "validation": [
+        "All screen IDs in screens.json have an implementation target.",
+        "Navigation matches navigation.json.",
+        "Bottom navigation remains HOME | TRANSACTIONS | RECEIVE | PROFILE.",
+        "Warm Editorial design system is visually respected.",
+        "No unapproved screens or features are introduced."
+      ],
+      "gate": "Complete navigation and visual audit before integrating the payment engine."
+    },
+    {
+      "id": 3,
+      "name": "QR and Recipient System",
+      "goal": "Build QR scanning and recipient preparation without initiating payment.",
+      "deliverables": [
+        "CameraX integration.",
+        "QR detection/decoding.",
+        "UPI payload parsing.",
+        "Recipient validation.",
+        "QR Recipient screen.",
+        "Amount Entry validation.",
+        "Review Payment preparation."
+      ],
+      "validation": [
+        "Standard supported UPI QR can be scanned.",
+        "Invalid/unsupported/missing QR data reaches the correct pre-initiation error state.",
+        "Scanning never initiates a payment.",
+        "Camera permission failure reaches the correct state."
+      ],
+      "gate": "QR flow must work end-to-end up to Review Payment without touching the payment engine."
+    },
+    {
+      "id": 4,
+      "name": "Payment Engine Prototype",
+      "goal": "Integrate the proven USSD/accessibility mechanism behind a controlled PaymentEngine interface.",
+      "deliverables": [
+        "PaymentEngine interface.",
+        "Payment state machine.",
+        "USSD launcher/integration.",
+        "AccessibilityService adapter.",
+        "Screen classifier.",
+        "Safe non-sensitive input handling.",
+        "PIN/sensitive-screen stop behavior.",
+        "WAITING_RESPONSE/PROCESSING behavior."
+      ],
+      "validation": [
+        "*99# detection works.",
+        "INITIAL_MENU is correctly classified.",
+        "Send Money is correctly selected.",
+        "UPI ID method is correctly selected.",
+        "UPI ID input is handled safely.",
+        "PIN_OR_SENSITIVE causes automation to stop.",
+        "Unknown/non-actionable screens cause automation to stop.",
+        "No arbitrary editable field receives payment input."
+      ],
+      "gate": "Do not call the payment prototype production-ready until real-device behavior is repeatable."
+    },
+    {
+      "id": 5,
+      "name": "Real Payment Integration",
+      "goal": "Connect the QR/review flow to the PaymentEngine while preserving the frozen payment semantics.",
+      "deliverables": [
+        "Review Payment -> PaymentEngine transition.",
+        "Processing state.",
+        "Definitive success mapping.",
+        "Definitive failure mapping.",
+        "UNKNOWN mapping.",
+        "Pre-initiation cancellation mapping.",
+        "Stop waiting behavior."
+      ],
+      "validation": [
+        "SUCCESS only occurs on definitive confirmation.",
+        "FAILED only occurs on definitive failure.",
+        "UNKNOWN does not offer immediate retry.",
+        "Stop waiting does not claim to cancel an initiated transaction.",
+        "Network loss after initiation does not automatically become FAILED/CANCELLED."
+      ],
+      "gate": "Payment-state truth must pass safety tests before transaction persistence is considered complete."
+    },
+    {
+      "id": 6,
+      "name": "Transactions and Receive",
+      "goal": "Complete local transaction records and receiving-money surfaces.",
+      "deliverables": [
+        "Room transaction entity.",
+        "DAO/repository.",
+        "Transactions list.",
+        "Transaction Details.",
+        "Success-to-history persistence.",
+        "Receive Money flow.",
+        "UPI Details flow."
+      ],
+      "validation": [
+        "Only real V4SH payment records are stored.",
+        "No fabricated reference IDs.",
+        "History is clearly presented as a V4SH/local record.",
+        "Receive flow does not imply a V4SH wallet."
+      ],
+      "gate": "Transaction persistence must match payment truth exactly."
+    },
+    {
+      "id": 7,
+      "name": "Festival Reliability",
+      "goal": "Make the app resilient to the conditions expected at a crowded college festival.",
+      "deliverables": [
+        "Network availability checks.",
+        "No Mobile Network state.",
+        "SIM selection persistence.",
+        "Payment access readiness checks.",
+        "Lifecycle recovery.",
+        "Safe handling of app background/foreground transitions.",
+        "State restoration where appropriate."
+      ],
+      "validation": [
+        "No network before initiation is non-destructive.",
+        "Network loss after initiation does not cause unsafe automatic retry.",
+        "Selected payment SIM remains consistent.",
+        "Payment access readiness is truthful.",
+        "Processing state cannot accidentally trigger duplicate payment."
+      ],
+      "gate": "Run reliability tests on the physical device under degraded conditions."
+    },
+    {
+      "id": 8,
+      "name": "Security and Privacy Hardening",
+      "goal": "Verify that implementation obeys security.json rather than merely displaying security copy.",
+      "deliverables": [
+        "Credential boundary audit.",
+        "Logging audit.",
+        "Storage audit.",
+        "AccessibilityService safety audit.",
+        "Permission audit.",
+        "Privacy-copy verification."
+      ],
+      "validation": [
+        "No UPI PIN enters app state.",
+        "No OTP enters app state.",
+        "No sensitive credentials are logged or stored.",
+        "Automation stops on sensitive screens.",
+        "Only required permissions are requested.",
+        "Privacy/security claims match actual behavior."
+      ],
+      "gate": "No release candidate until security validation passes."
+    },
+    {
+      "id": 9,
+      "name": "Real Device Validation",
+      "goal": "Validate the complete product on the physical Redmi Note 13 Pro+ test device and target network conditions.",
+      "deliverables": [
+        "Full setup-flow test.",
+        "QR payment test.",
+        "USSD/payment test.",
+        "Transaction history test.",
+        "Receive-money test.",
+        "Failure/UNKNOWN tests.",
+        "Network-loss tests.",
+        "Dual-SIM tests where available."
+      ],
+      "validation": [
+        "Build installs cleanly.",
+        "Critical flows are repeatable.",
+        "No crash in the primary payment journey.",
+        "No unsafe duplicate-payment path.",
+        "Visual audit passes against the approved Stitch references."
+      ],
+      "gate": "Only after this gate should the project be treated as demo-ready."
+    },
+    {
+      "id": 10,
+      "name": "Final Product and Demo",
+      "goal": "Prepare a stable festival-demo build and presentation narrative.",
+      "deliverables": [
+        "Release/demo build.",
+        "Clean first-run setup.",
+        "Seeded/realistic local transaction presentation where appropriate.",
+        "Demo script.",
+        "Failure-state demo path.",
+        "Architecture explanation.",
+        "Security explanation.",
+        "Known limitations."
+      ],
+      "validation": [
+        "Demo follows the actual implemented behavior.",
+        "No feature is presented as supported when it is not implemented.",
+        "Known limitations are explicitly documented."
+      ]
+    }
+  ],
+  "hard_gates": [
+    {
+      "after_phase": 1,
+      "condition": "App builds and launches on the physical device."
+    },
+    {
+      "after_phase": 2,
+      "condition": "Frozen screen catalog and navigation are implemented without scope drift."
+    },
+    {
+      "after_phase": 3,
+      "condition": "QR flow reaches Review Payment without initiating payment."
+    },
+    {
+      "after_phase": 4,
+      "condition": "PaymentEngine prototype safely handles the proven USSD flow and stops at sensitive screens."
+    },
+    {
+      "after_phase": 5,
+      "condition": "Payment outcome semantics pass SUCCESS/FAILED/UNKNOWN/CANCELLED safety validation."
+    },
+    {
+      "after_phase": 8,
+      "condition": "Security and privacy validation passes."
+    },
+    {
+      "after_phase": 9,
+      "condition": "Complete critical flow passes on the real device."
+    }
+  ],
+  "priority_order": [
+    "Correctness",
+    "Payment safety",
+    "Security",
+    "Real-device reliability",
+    "Navigation correctness",
+    "Visual fidelity",
+    "Performance",
+    "Additional polish"
+  ],
+  "antigravity_execution_rule": {
+    "workflow": [
+      "Read the relevant MCP specification before modifying a feature.",
+      "Inspect the existing implementation.",
+      "Make the smallest coherent change.",
+      "Build and run tests.",
+      "Validate against the relevant specification.",
+      "Inspect on the physical device when the change affects platform behavior.",
+      "Report deviations instead of silently changing frozen product rules."
+    ],
+    "do_not": [
+      "Implement all phases in one uncontrolled pass.",
+      "Replace architecture because a shortcut is easier.",
+      "Add features outside product.json.",
+      "Treat passing compilation as proof of payment correctness.",
+      "Treat a visually similar screen as proof of correct navigation or payment semantics."
+    ]
+  }
+}

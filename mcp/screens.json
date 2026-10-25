@@ -1,0 +1,620 @@
+{
+  "schema_version": "1.0",
+  "project": "V4SH",
+  "purpose": "Authoritative registry of exported Stitch screen artifacts for the V4SH MCP server.",
+  "source_of_truth": {
+    "visual": "screen.png",
+    "implementation_reference": "code.html",
+    "screen_identity": "folder name",
+    "design_system": "warm_editorial_upi/DESIGN.md",
+    "functional_behavior": "V4SH Project Audit & Implementation Roadmap"
+  },
+  "rules": [
+    "Do not infer screen identity from HTML <title> alone.",
+    "Folder name is the authoritative screen identifier.",
+    "screen.png is the visual reference.",
+    "code.html is a Stitch implementation reference, not the Android implementation.",
+    "Duplicate exports must not create duplicate product screens.",
+    "warm_editorial_upi is a design-system/reference artifact, not a product screen."
+  ],
+  "screen_count_unique": 28,
+  "screens": [
+    {
+      "id": "amount_entry",
+      "folder": "v4sh_amount_entry",
+      "display_name": "Amount Entry",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_amount_entry",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_amount_entry/screen.png",
+        "html": "design/1st set of designs/v4sh_amount_entry/code.html"
+      },
+      "html_title": "V4SH — QR Recipient",
+      "headings": [
+        "Aarav Sharma",
+        "Enter amount"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "app_security",
+      "folder": "v4sh_app_security",
+      "display_name": "App Security",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_app_security",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_app_security/screen.png",
+        "html": "design/1st set of designs/v4sh_app_security/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "App Security",
+        "Authentication happens through your payment provider"
+      ],
+      "duplicate_exports": [
+        {
+          "source_set": "2nd set of designs",
+          "path": "design/2nd set of designs/v4sh_app_security"
+        }
+      ]
+    },
+    {
+      "id": "help_center",
+      "folder": "v4sh_help_center",
+      "display_name": "Help Center",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_help_center",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_help_center/screen.png",
+        "html": "design/1st set of designs/v4sh_help_center/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "How can we help?",
+        "Popular Topics",
+        "Stay safe with V4SH",
+        "Still need help?"
+      ],
+      "duplicate_exports": [
+        {
+          "source_set": "2nd set of designs",
+          "path": "design/2nd set of designs/v4sh_help_center"
+        }
+      ]
+    },
+    {
+      "id": "home",
+      "folder": "v4sh_home",
+      "display_name": "Home",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_home",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_home/screen.png",
+        "html": "design/1st set of designs/v4sh_home/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "What would you like to do?",
+        "Recent Activity"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_cancelled",
+      "folder": "v4sh_payment_cancelled",
+      "display_name": "Payment Cancelled",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_payment_cancelled",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_payment_cancelled/screen.png",
+        "html": "design/1st set of designs/v4sh_payment_cancelled/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Payment cancelled",
+        "Your payment was not completed"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_failed",
+      "folder": "v4sh_payment_failed",
+      "display_name": "Payment Failed",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_payment_failed",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_payment_failed/screen.png",
+        "html": "design/1st set of designs/v4sh_payment_failed/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Payment failed",
+        "What you can do"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_in_progress",
+      "folder": "v4sh_payment_in_progress",
+      "display_name": "Payment In Progress",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_payment_in_progress",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_payment_in_progress/screen.png",
+        "html": "design/1st set of designs/v4sh_payment_in_progress/code.html"
+      },
+      "html_title": "V4SH — Payment in Progress",
+      "headings": [
+        "Payment in progress"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_status_unclear",
+      "folder": "v4sh_payment_status_unclear",
+      "display_name": "Payment Status Unclear",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_payment_status_unclear",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_payment_status_unclear/screen.png",
+        "html": "design/1st set of designs/v4sh_payment_status_unclear/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Payment status unclear",
+        "Don't pay again yet"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "privacy",
+      "folder": "v4sh_privacy",
+      "display_name": "Privacy",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_privacy",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_privacy/screen.png",
+        "html": "design/1st set of designs/v4sh_privacy/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Privacy",
+        "Your privacy comes first",
+        "Never stored by V4SH",
+        "Clear local activity",
+        "Your bank remains your bank"
+      ],
+      "duplicate_exports": [
+        {
+          "source_set": "2nd set of designs",
+          "path": "design/2nd set of designs/v4sh_privacy"
+        }
+      ]
+    },
+    {
+      "id": "profile",
+      "folder": "v4sh_profile",
+      "display_name": "Profile",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_profile",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_profile/screen.png",
+        "html": "design/1st set of designs/v4sh_profile/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Profile",
+        "YMS Vaibhav",
+        "Payment Account",
+        "Security &amp; Privacy",
+        "Help &amp; Support",
+        "About V4SH"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "qr_recipient",
+      "folder": "v4sh_qr_recipient",
+      "display_name": "Qr Recipient",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_qr_recipient",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_qr_recipient/screen.png",
+        "html": "design/1st set of designs/v4sh_qr_recipient/code.html"
+      },
+      "html_title": "V4SH — QR Recipient",
+      "headings": [
+        "Recipient",
+        "Aarav Sharma",
+        "Scanned from UPI QR"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "qr_scanner",
+      "folder": "v4sh_qr_scanner",
+      "display_name": "Qr Scanner",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_qr_scanner",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_qr_scanner/screen.png",
+        "html": "design/1st set of designs/v4sh_qr_scanner/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Scan &amp; Pay"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "receive_money",
+      "folder": "v4sh_receive_money",
+      "display_name": "Receive Money",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_receive_money",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_receive_money/screen.png",
+        "html": "design/1st set of designs/v4sh_receive_money/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Receive money"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "review_payment",
+      "folder": "v4sh_review_payment",
+      "display_name": "Review Payment",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_review_payment",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_review_payment/screen.png",
+        "html": "design/1st set of designs/v4sh_review_payment/code.html"
+      },
+      "html_title": "V4SH — QR Recipient",
+      "headings": [
+        "Review payment",
+        "Before you pay"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "transactions",
+      "folder": "v4sh_transactions",
+      "display_name": "Transactions",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_transactions",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_transactions/screen.png",
+        "html": "design/1st set of designs/v4sh_transactions/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Transactions"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "upi_details",
+      "folder": "v4sh_upi_details",
+      "display_name": "Upi Details",
+      "source_set": "1st set of designs",
+      "path": "design/1st set of designs/v4sh_upi_details",
+      "assets": {
+        "image": "design/1st set of designs/v4sh_upi_details/screen.png",
+        "html": "design/1st set of designs/v4sh_upi_details/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Your UPI details",
+        "Your UPI account stays with your payment provider"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "camera_access_required",
+      "folder": "v4sh_camera_access_required",
+      "display_name": "Camera Access Required",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_camera_access_required",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_camera_access_required/screen.png",
+        "html": "design/3rd set of designs/v4sh_camera_access_required/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Camera access required",
+        "Enable camera in Android settings"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "contact_support",
+      "folder": "v4sh_contact_support",
+      "display_name": "Contact Support",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_contact_support",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_contact_support/screen.png",
+        "html": "design/3rd set of designs/v4sh_contact_support/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Need a hand?"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "no_mobile_network",
+      "folder": "v4sh_no_mobile_network",
+      "display_name": "No Mobile Network",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_no_mobile_network",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_no_mobile_network/screen.png",
+        "html": "design/3rd set of designs/v4sh_no_mobile_network/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "No Mobile Network",
+        "No mobile network",
+        "No payment was started",
+        "What you can do"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_access_setup",
+      "folder": "v4sh_payment_access_setup",
+      "display_name": "Payment Access Setup",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_payment_access_setup",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_payment_access_setup/screen.png",
+        "html": "design/3rd set of designs/v4sh_payment_access_setup/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Payment Access Setup",
+        "Set up payment access",
+        "Connect V4SH to your payment flow",
+        "What this enables",
+        "Keep your payment credentials private"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_details_missing",
+      "folder": "v4sh_payment_details_missing",
+      "display_name": "Payment Details Missing",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_payment_details_missing",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_payment_details_missing/screen.png",
+        "html": "design/3rd set of designs/v4sh_payment_details_missing/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Payment details missing",
+        "QR read summary",
+        "No transaction was initiated"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_readiness",
+      "folder": "v4sh_payment_readiness",
+      "display_name": "Payment Readiness",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_payment_readiness",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_payment_readiness/screen.png",
+        "html": "design/3rd set of designs/v4sh_payment_readiness/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Payment Readiness",
+        "Payment readiness",
+        "Almost ready",
+        "Readiness",
+        "Mobile network",
+        "Payment access",
+        "UPI details",
+        "Camera"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_sim_selection",
+      "folder": "v4sh_payment_sim_selection",
+      "display_name": "Payment Sim Selection",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_payment_sim_selection",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_payment_sim_selection/screen.png",
+        "html": "design/3rd set of designs/v4sh_payment_sim_selection/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "V4Sh — Payment Sim Selection",
+        "Choose your payment SIM",
+        "Available SIMs"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "payment_successful",
+      "folder": "v4sh_payment_successful",
+      "display_name": "Payment Successful",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_payment_successful",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_payment_successful/screen.png",
+        "html": "design/3rd set of designs/v4sh_payment_successful/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Payment successful"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "qr_code_not_recognized",
+      "folder": "v4sh_qr_code_not_recognized",
+      "display_name": "Qr Code Not Recognized",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_qr_code_not_recognized",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_qr_code_not_recognized/screen.png",
+        "html": "design/3rd set of designs/v4sh_qr_code_not_recognized/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "QR code not recognized",
+        "Scanning tips"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "transaction_details",
+      "folder": "v4sh_transaction_details",
+      "display_name": "Transaction Details",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_transaction_details",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_transaction_details/screen.png",
+        "html": "design/3rd set of designs/v4sh_transaction_details/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Transaction Details",
+        "Payment details",
+        "V4SH payment record"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "unsupported_qr_code",
+      "folder": "v4sh_unsupported_qr_code",
+      "display_name": "Unsupported Qr Code",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_unsupported_qr_code",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_unsupported_qr_code/screen.png",
+        "html": "design/3rd set of designs/v4sh_unsupported_qr_code/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Unsupported QR code",
+        "Supported QR formats"
+      ],
+      "duplicate_exports": []
+    },
+    {
+      "id": "welcome_setup",
+      "folder": "v4sh_welcome_setup",
+      "display_name": "Welcome Setup",
+      "source_set": "3rd set of designs",
+      "path": "design/3rd set of designs/v4sh_welcome_setup",
+      "assets": {
+        "image": "design/3rd set of designs/v4sh_welcome_setup/screen.png",
+        "html": "design/3rd set of designs/v4sh_welcome_setup/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Welcome to V4SH",
+        "Your UPI. Your account. Your payment.",
+        "Mobile network",
+        "Payment access",
+        "Your UPI details",
+        "Camera"
+      ],
+      "duplicate_exports": []
+    }
+  ],
+  "reference_artifacts": [
+    {
+      "name": "warm_editorial_upi",
+      "set": "1st set of designs",
+      "path": "design/1st set of designs/warm_editorial_upi",
+      "type": "design_system_reference",
+      "files": [
+        "DESIGN.md"
+      ]
+    },
+    {
+      "name": "warm_editorial_upi",
+      "set": "2nd set of designs",
+      "path": "design/2nd set of designs/warm_editorial_upi",
+      "type": "design_system_reference",
+      "files": [
+        "DESIGN.md"
+      ]
+    },
+    {
+      "name": "warm_editorial_upi",
+      "set": "3rd set of designs",
+      "path": "design/3rd set of designs/warm_editorial_upi",
+      "type": "design_system_reference",
+      "files": [
+        "DESIGN.md"
+      ]
+    }
+  ],
+  "duplicate_exports": [
+    {
+      "id": "app_security",
+      "folder": "v4sh_app_security",
+      "display_name": "App Security",
+      "source_set": "2nd set of designs",
+      "path": "design/2nd set of designs/v4sh_app_security",
+      "assets": {
+        "image": "design/2nd set of designs/v4sh_app_security/screen.png",
+        "html": "design/2nd set of designs/v4sh_app_security/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "App Security",
+        "Authentication happens through your payment provider"
+      ]
+    },
+    {
+      "id": "help_center",
+      "folder": "v4sh_help_center",
+      "display_name": "Help Center",
+      "source_set": "2nd set of designs",
+      "path": "design/2nd set of designs/v4sh_help_center",
+      "assets": {
+        "image": "design/2nd set of designs/v4sh_help_center/screen.png",
+        "html": "design/2nd set of designs/v4sh_help_center/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "How can we help?",
+        "Popular Topics",
+        "Stay safe with V4SH",
+        "Still need help?"
+      ]
+    },
+    {
+      "id": "privacy",
+      "folder": "v4sh_privacy",
+      "display_name": "Privacy",
+      "source_set": "2nd set of designs",
+      "path": "design/2nd set of designs/v4sh_privacy",
+      "assets": {
+        "image": "design/2nd set of designs/v4sh_privacy/screen.png",
+        "html": "design/2nd set of designs/v4sh_privacy/code.html"
+      },
+      "html_title": "",
+      "headings": [
+        "Privacy",
+        "Your privacy comes first",
+        "Never stored by V4SH",
+        "Clear local activity",
+        "Your bank remains your bank"
+      ]
+    }
+  ]
+}
