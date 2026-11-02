@@ -25,8 +25,9 @@ fun MainNavHost(navController: NavHostController) {
             composable("receive_money") { ReceiveMoneyScreen(navController) }
             composable("profile") { ProfileScreen(navController) }
 
-            // Account / Information screens
+            // Account / Information & Check Balance screens
             composable("upi_details") { UpiDetailsScreen(navController) }
+            composable("check_balance") { CheckBalanceScreen(navController) }
             composable("app_security") { AppSecurityScreen(navController) }
             composable("privacy") { PrivacyScreen(navController) }
             composable("help_center") { HelpCenterScreen(navController) }

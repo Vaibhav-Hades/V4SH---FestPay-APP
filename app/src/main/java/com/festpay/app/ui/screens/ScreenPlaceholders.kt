@@ -49,6 +49,8 @@ import com.festpay.app.ui.viewmodel.PaymentScenario
 import com.festpay.app.ui.viewmodel.PaymentState
 import com.festpay.app.ui.viewmodel.PaymentViewModel
 import com.festpay.app.ui.viewmodel.TransactionRecord
+import com.festpay.app.FestPayAccessibilityService
+import kotlinx.coroutines.delay
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -80,10 +82,10 @@ var isDebugControlsVisible by mutableStateOf(false)
 
 // ----- Shared Payment State for Scanned Data -----
 object SharedPaymentState {
-    var payeeVpa: String = "aarav@upi"
-    var payeeName: String = "Aarav Sharma"
-    var paymentAmount: String = "500"
-    var paymentNote: String = "College festival food stall"
+    var payeeVpa: String = ""
+    var payeeName: String = ""
+    var paymentAmount: String = ""
+    var paymentNote: String = ""
 }
 
 // ----- UPI URI Parser & Validator -----
@@ -96,6 +98,9 @@ sealed class UpiParseResult {
 }
 
 fun parseAndValidateUpiQr(rawValue: String): UpiParseResult {
+    SharedPaymentState.paymentAmount = ""
+    SharedPaymentState.paymentNote = ""
+
     val trimmed = rawValue.trim()
     Log.d("V4SH_QR", "QR detected and evaluated")
 
@@ -116,6 +121,7 @@ fun parseAndValidateUpiQr(rawValue: String): UpiParseResult {
     val am = uri?.getQueryParameter("am") ?: extractParam(trimmed, "am")
     val cu = uri?.getQueryParameter("cu") ?: extractParam(trimmed, "cu")
     val mc = uri?.getQueryParameter("mc") ?: extractParam(trimmed, "mc")
+    val tn = uri?.getQueryParameter("tn") ?: extractParam(trimmed, "tn")
 
     if (pa.isNullOrBlank()) {
         Log.d("V4SH_QR", "QR rejected: missing payee VPA")
@@ -130,6 +136,13 @@ fun parseAndValidateUpiQr(rawValue: String): UpiParseResult {
     if (cu != null && cu.uppercase() != "INR") {
         Log.d("V4SH_QR", "QR rejected: unsupported currency")
         return UpiParseResult.UnsupportedFormat
+    }
+
+    if (!am.isNullOrBlank()) {
+        SharedPaymentState.paymentAmount = am.trim()
+    }
+    if (!tn.isNullOrBlank()) {
+        SharedPaymentState.paymentNote = tn.trim()
     }
 
     Log.d("V4SH_QR", "UPI QR validated successfully")
@@ -316,6 +329,32 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                 }
 
                 item {
+                    Card(
+                        shape = largeCardShape,
+                        colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate("check_balance") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = PrimaryBurgundy)
+                                Column {
+                                    Text("Check Balance", style = MaterialTheme.typography.labelLarge.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
+                                    Text("Check bank balance via *99#", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                                }
+                            }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = SecondaryUmber)
+                        }
+                    }
+                }
+
+                item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -374,6 +413,32 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                                     Text("Show your UPI QR", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
                                 }
                             }
+                        }
+                    }
+                }
+
+                item {
+                    Card(
+                        shape = largeCardShape,
+                        colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate("check_balance") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = PrimaryBurgundy)
+                                Column {
+                                    Text("Check Balance", style = MaterialTheme.typography.labelLarge.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
+                                    Text("Check bank balance via *99#", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                                }
+                            }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = SecondaryUmber)
                         }
                     }
                 }
@@ -2199,6 +2264,39 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
 
 @Composable
 fun PaymentInProgressScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
+    var presentationState by remember { mutableStateOf("CONNECTING") }
+
+    LaunchedEffect(Unit) {
+        while (paymentViewModel.paymentState == PaymentState.PROCESSING || paymentViewModel.paymentState == PaymentState.AUTHENTICATION_REQUIRED) {
+            presentationState = FestPayAccessibilityService.UssdSessionData.currentPresentationState
+            if (presentationState == "SUCCESS") {
+                navController.navigate("payment_successful") { popUpTo("home") }
+                break
+            } else if (presentationState == "FAILED") {
+                navController.navigate("payment_failed")
+                break
+            } else if (presentationState == "UNKNOWN") {
+                navController.navigate("payment_status_unclear")
+                break
+            } else if (presentationState == "AUTHENTICATION_REQUIRED") {
+                navController.navigate("authentication_required")
+                break
+            }
+            delay(300)
+        }
+    }
+
+    val (titleText, bodyText) = when (presentationState) {
+        "CONNECTING" -> "Connecting to payment service" to "Establishing secure USSD session..."
+        "SEND_MONEY" -> "Preparing payment" to "Connecting securely to your bank payment service."
+        "RECIPIENT_ENTRY" -> "Adding recipient" to "Supplying recipient VPA: ${SharedPaymentState.payeeVpa}"
+        "AMOUNT_ENTRY" -> "Preparing amount" to "Supplying payment amount: ₹${SharedPaymentState.paymentAmount}"
+        "REVIEW", "CONFIRMING" -> "Confirming payment" to "Reviewing payment details with the payment service."
+        "AUTHENTICATION_REQUIRED" -> "Authentication required" to "Complete your UPI PIN entry on the carrier payment screen.\nV4SH never enters, stores, or sees your UPI PIN."
+        "WAITING_RESULT" -> "Confirming payment" to "Waiting for the payment service to return a final result."
+        else -> "Payment in progress" to "Waiting for payment confirmation. Please don't close the app."
+    }
+
     V4SHTheme {
         Scaffold(
             topBar = {
@@ -2215,15 +2313,29 @@ fun PaymentInProgressScreen(navController: NavHostController, paymentViewModel: 
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(24.dp))
-                Text("Payment in progress", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("Waiting for payment confirmation. Please don't close the app.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
+                Text(
+                    text = if (presentationState == "AUTHENTICATION_REQUIRED") "Authentication required" else titleText,
+                    style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy),
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = bodyText,
+                    style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 32.dp)
+                )
 
                 Box(
                     modifier = Modifier.size(140.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = PrimaryBurgundy, strokeWidth = 4.dp, modifier = Modifier.fillMaxSize())
-                    Icon(Icons.Default.HourglassTop, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(36.dp))
+                    Icon(
+                        imageVector = if (presentationState == "AUTHENTICATION_REQUIRED") Icons.Default.Lock else Icons.Default.HourglassTop,
+                        contentDescription = null,
+                        tint = PrimaryBurgundy,
+                        modifier = Modifier.size(36.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -2609,6 +2721,155 @@ fun TransactionDetailsScreen(navController: NavHostController, paymentViewModel:
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Reference ID", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
                             Text(lastRecord?.localTransactionId ?: "V4SH-MOCK", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CheckBalanceScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
+    val context = LocalContext.current
+    var checking by remember { mutableStateOf(false) }
+    var permissionDeniedMessage by remember { mutableStateOf(false) }
+    var presentationState by remember { mutableStateOf("IDLE") }
+    var parsedBalance by remember { mutableStateOf<String?>(null) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            permissionDeniedMessage = false
+            checking = true
+            paymentViewModel.startBalanceCheck(context) { }
+        } else {
+            permissionDeniedMessage = true
+        }
+    }
+
+    LaunchedEffect(checking) {
+        if (checking) {
+            while (checking) {
+                presentationState = FestPayAccessibilityService.UssdSessionData.currentPresentationState
+                parsedBalance = FestPayAccessibilityService.UssdSessionData.parsedBalance
+                if (presentationState == "BALANCE_SUCCESS" || presentationState == "BALANCE_UNKNOWN" || presentationState == "FAILED") {
+                    checking = false
+                    break
+                }
+                delay(300)
+            }
+        }
+    }
+
+    V4SHTheme {
+        Scaffold(
+            topBar = {
+                V4shTopBar(title = "Check Balance", onBack = { navController.popBackStack() })
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(SurfaceCream)
+                    .padding(innerPadding)
+                    .padding(horizontal = spacing)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Box(
+                    modifier = Modifier.size(64.dp).clip(CircleShape).background(PrimaryBurgundy),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (presentationState == "BALANCE_SUCCESS" && parsedBalance != null) {
+                    Text("Available Balance", style = MaterialTheme.typography.labelLarge.copy(color = SecondaryUmber, fontWeight = FontWeight.Bold, letterSpacing = 1.sp))
+                    Text("₹$parsedBalance", style = MaterialTheme.typography.displayLarge.copy(fontSize = 38.sp, fontWeight = FontWeight.Bold, color = PrimaryBurgundy), modifier = Modifier.padding(vertical = 8.dp))
+                    Text("Your current account balance", style = MaterialTheme.typography.bodyMedium.copy(color = OnSurfaceVariant), textAlign = TextAlign.Center)
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Button(
+                        onClick = { navController.popBackStack() },
+                        shape = largeCardShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        Text("Done", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = Color.White))
+                    }
+                } else if (presentationState == "BALANCE_UNKNOWN" || presentationState == "FAILED") {
+                    Text("Balance unavailable", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy), textAlign = TextAlign.Center)
+                    Text("V4SH received a response from the payment service, but could not safely identify the account balance. Please check the carrier response before trying again.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+
+                    Button(
+                        onClick = {
+                            presentationState = "IDLE"
+                            parsedBalance = null
+                            val hasCallPhone = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+                            if (hasCallPhone) {
+                                checking = true
+                                paymentViewModel.startBalanceCheck(context) { }
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.CALL_PHONE)
+                            }
+                        },
+                        shape = largeCardShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        Text("Try Again", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = Color.White))
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedButton(
+                        onClick = { navController.popBackStack() },
+                        shape = largeCardShape,
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("Done", color = PrimaryBurgundy)
+                    }
+                } else {
+                    Text("Check Bank Balance", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy), textAlign = TextAlign.Center)
+                    Text("V4SH will automatically dial *99# and select Check Balance (3). You will enter your UPI PIN on the carrier screen.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
+
+                    if (permissionDeniedMessage) {
+                        Card(
+                            shape = cardShape,
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFBEBEB)),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Phone permission required", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = Color(0xFF93000A)))
+                                Text("Phone-call permission is required to initiate the USSD balance check automatically without manual dialing.", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant), modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val hasCallPhone = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+                            if (hasCallPhone) {
+                                permissionDeniedMessage = false
+                                checking = true
+                                paymentViewModel.startBalanceCheck(context) { }
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.CALL_PHONE)
+                            }
+                        },
+                        shape = largeCardShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        if (checking) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(if (permissionDeniedMessage) "Try Again" else "Check Balance on *99#", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = Color.White))
                         }
                     }
                 }

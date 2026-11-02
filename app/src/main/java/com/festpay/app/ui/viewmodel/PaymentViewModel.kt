@@ -66,7 +66,8 @@ class RealUssdPaymentEngine : PaymentEngine {
             context.sendBroadcast(resetIntent)
 
             val ussdUri = Uri.parse("tel:" + Uri.encode("*99#"))
-            val callIntent = Intent(Intent.ACTION_DIAL, ussdUri).apply {
+            val ussdAction = if (FestPayAccessibilityService.UssdSessionData.isBalanceCheck) Intent.ACTION_CALL else Intent.ACTION_DIAL
+            val callIntent = Intent(ussdAction, ussdUri).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             try {
@@ -152,6 +153,10 @@ class PaymentViewModel : ViewModel() {
         if (paymentState == PaymentState.PROCESSING) return
         paymentState = PaymentState.PROCESSING
 
+        // Pass recipient VPA and amount to AccessibilityService in-memory session data
+        FestPayAccessibilityService.UssdSessionData.recipientVpa = vpa
+        FestPayAccessibilityService.UssdSessionData.amount = amount
+
         viewModelScope.launch {
             val request = PaymentRequest(vpa, name, amount)
             // PRODUCTION FIX: Ensure realEngine is ALWAYS used unless debug controls are visible AND mock mode is explicitly chosen
@@ -202,6 +207,45 @@ class PaymentViewModel : ViewModel() {
             }
             paymentState = finalState
             onStatusChecked(finalState)
+        }
+    }
+
+    fun startBalanceCheck(ctx: Context?, onComplete: (PaymentState) -> Unit) {
+        if (paymentState == PaymentState.PROCESSING) return
+        paymentState = PaymentState.PROCESSING
+
+        viewModelScope.launch {
+            val context = ctx
+            if (context != null) {
+                val resetIntent = Intent(FestPayAccessibilityService.ACTION_NEW_USSD_SESSION).apply {
+                    setPackage(context.packageName)
+                }
+                context.sendBroadcast(resetIntent)
+
+                // Set isBalanceCheck = true AFTER sending resetBroadcast
+                FestPayAccessibilityService.UssdSessionData.reset()
+                FestPayAccessibilityService.UssdSessionData.isBalanceCheck = true
+
+                val ussdUri = Uri.parse("tel:" + Uri.encode("*99#"))
+                val callIntent = Intent(Intent.ACTION_CALL, ussdUri).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                try {
+                    context.startActivity(callIntent)
+                } catch (e: Exception) {
+                    Log.e("PaymentViewModel", "Failed to start USSD session for balance check", e)
+                    paymentState = PaymentState.FAILED
+                    onComplete(PaymentState.FAILED)
+                    return@launch
+                }
+            } else {
+                FestPayAccessibilityService.UssdSessionData.reset()
+                FestPayAccessibilityService.UssdSessionData.isBalanceCheck = true
+            }
+
+            delay(1500)
+            paymentState = PaymentState.AUTHENTICATION_REQUIRED
+            onComplete(PaymentState.AUTHENTICATION_REQUIRED)
         }
     }
 }
