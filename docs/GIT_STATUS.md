@@ -1,0 +1,81 @@
+# Working tree status
+
+Snapshot after core journey implementation/validation on 2026-11-04. Includes pre-existing uncommitted work, not only this iteration. No commit or push.
+
+```text
+ M app/build.gradle.kts
+ M app/src/main/AndroidManifest.xml
+ M app/src/main/java/com/festpay/app/FestPayAccessibilityService.kt
+ M app/src/main/java/com/festpay/app/MainActivity.kt
+ M app/src/main/java/com/festpay/app/data/BalanceParser.kt
+ M app/src/main/java/com/festpay/app/data/TransactionRepository.kt
+ M app/src/main/java/com/festpay/app/ui/navigation/MainNavHost.kt
+ M app/src/main/java/com/festpay/app/ui/screens/ScreenPlaceholders.kt
+ M app/src/main/java/com/festpay/app/ui/viewmodel/PaymentViewModel.kt
+ M app/src/main/res/values/strings.xml
+ M app/src/main/res/xml/accessibility_service_config.xml
+ M app/src/main/res/xml/backup_rules.xml
+ M app/src/main/res/xml/data_extraction_rules.xml
+ M app/src/test/java/com/festpay/app/CheckBalanceStep1LaunchTest.kt
+?? app/proguard-rules.pro
+?? app/src/androidTest/java/com/festpay/app/ActivityRecoveryTest.kt
+?? app/src/androidTest/java/com/festpay/app/CarrierJourneyUiTest.kt
+?? app/src/androidTest/java/com/festpay/app/CarrierObservationJournalTest.kt
+?? app/src/androidTest/java/com/festpay/app/EncryptedStorageTest.kt
+?? app/src/androidTest/java/com/festpay/app/FinancialUiGuardTest.kt
+?? app/src/androidTest/java/com/festpay/app/JournalBoundaryTest.kt
+?? app/src/androidTest/java/com/festpay/app/LocalFlowRegressionTest.kt
+?? app/src/androidTest/java/com/festpay/app/OfflineBarcodeTest.kt
+?? app/src/androidTest/java/com/festpay/app/PaymentHistoryTest.kt
+?? app/src/androidTest/java/com/festpay/app/PaymentJournalTest.kt
+?? app/src/androidTest/java/com/festpay/app/PaymentReadinessLifecycleTest.kt
+?? app/src/androidTest/java/com/festpay/app/ProfilePersistenceTest.kt
+?? app/src/androidTest/java/com/festpay/app/ReadinessConsentTest.kt
+?? app/src/androidTest/java/com/festpay/app/SecureTestStores.kt
+?? app/src/androidTest/java/com/festpay/app/UssdSessionTransportTest.kt
+?? app/src/debug/
+?? app/src/main/java/com/festpay/app/data/AccessibilityConnection.kt
+?? app/src/main/java/com/festpay/app/data/AccessibilityConsent.kt
+?? app/src/main/java/com/festpay/app/data/AccessibilityTextPolicy.kt
+?? app/src/main/java/com/festpay/app/data/BalanceObservationPolicy.kt
+?? app/src/main/java/com/festpay/app/data/CarrierPaymentFlow.kt
+?? app/src/main/java/com/festpay/app/data/CarrierResultObservation.kt
+?? app/src/main/java/com/festpay/app/data/CellularReadiness.kt
+?? app/src/main/java/com/festpay/app/data/PaymentAttemptJournal.kt
+?? app/src/main/java/com/festpay/app/data/PaymentInputValidator.kt
+?? app/src/main/java/com/festpay/app/data/PaymentIntegrityPolicy.kt
+?? app/src/main/java/com/festpay/app/data/PaymentRecipient.kt
+?? app/src/main/java/com/festpay/app/data/ProtectedPreferences.kt
+?? app/src/main/java/com/festpay/app/data/ProtectedStorage.kt
+?? app/src/main/java/com/festpay/app/data/ReceiveQr.kt
+?? app/src/main/java/com/festpay/app/data/TransactionPresentation.kt
+?? app/src/main/java/com/festpay/app/data/UpiQrParser.kt
+?? app/src/main/java/com/festpay/app/data/UssdNavigationPolicy.kt
+?? app/src/main/java/com/festpay/app/data/UssdSessionTransport.kt
+?? app/src/main/java/com/festpay/app/data/UssdSourcePolicy.kt
+?? app/src/main/java/com/festpay/app/ui/screens/CarrierPaymentJourneyScreen.kt
+?? app/src/main/java/com/festpay/app/ui/screens/MobilePaymentScreen.kt
+?? app/src/main/java/com/festpay/app/ui/screens/PaymentSetupScreen.kt
+?? app/src/main/java/com/festpay/app/ui/screens/ReceiveAccountQr.kt
+?? app/src/test/java/com/festpay/app/AccessibilityConnectionTest.kt
+?? app/src/test/java/com/festpay/app/AccessibilityTextPolicyTest.kt
+?? app/src/test/java/com/festpay/app/BalanceObservationPolicyTest.kt
+?? app/src/test/java/com/festpay/app/BalanceParserSafetyTest.kt
+?? app/src/test/java/com/festpay/app/BeneficiaryVerificationTest.kt
+?? app/src/test/java/com/festpay/app/CarrierPaymentFlowTest.kt
+?? app/src/test/java/com/festpay/app/CarrierResultClassifierTest.kt
+?? app/src/test/java/com/festpay/app/CellularReadinessTest.kt
+?? app/src/test/java/com/festpay/app/LocalMockPaymentEngine.kt
+?? app/src/test/java/com/festpay/app/PaymentInputTest.kt
+?? app/src/test/java/com/festpay/app/PaymentIntegrityPolicyTest.kt
+?? app/src/test/java/com/festpay/app/PaymentPreflightTest.kt
+?? app/src/test/java/com/festpay/app/ProfileInputTest.kt
+?? app/src/test/java/com/festpay/app/ProtectedStorageTest.kt
+?? app/src/test/java/com/festpay/app/QrJourneyInputTest.kt
+?? app/src/test/java/com/festpay/app/ReceiveQrTest.kt
+?? app/src/test/java/com/festpay/app/TransactionPresentationTest.kt
+?? app/src/test/java/com/festpay/app/UssdNavigationPolicyTest.kt
+?? app/src/test/java/com/festpay/app/UssdSessionPolicyTest.kt
+?? docs/
+?? tools/
+```

@@ -1,0 +1,25 @@
+# Release verification
+
+R8 minification/resource shrinking and release lint/error gates are enabled. Android framework/dependency consumer rules are retained; verbose/debug/info Log calls are removed from the release. No broad keep-all or ignore-warning rule was added. Hardening does not establish financial authority.
+
+The first offline release check could not resolve uncached official lint-gradle 32.4.1. Fetching it with a normal connected build succeeded. Release lint completed with zero errors (42 warnings and one hint before the target migration). The signed shrunk release APK built; zipalign -c -P 16 4 and apksigner verify both returned success. Those counts describe the preceding target-35 artifact. Final target-36 debug/release/test builds and release lint passed with 0 errors, 41 warnings and 1 hint; the final signed APK again passed signature, zip alignment, all eight 64-bit ELF checks and manifest/mapping fixture-exclusion checks.
+
+## Native libraries
+
+Direct ELF program-header inspection found every packaged arm64-v8a and x86_64 LOAD alignment at least 16384 bytes. Only armeabi-v7a/x86 libbarhopper_v3.so uses 4096-byte alignment; remaining 32-bit libraries are 16384. Android's [16 KB guide](https://developer.android.com/guide/practices/page-sizes) scopes the Play requirement to 64-bit devices and instructs checking the 64-bit ABIs. Do not describe the 32-bit warning as failed 64-bit alignment. Real execution on a 16 KB device/emulator remains NOT TESTED. No binary was patched or ABI silently removed.
+
+The [official ML Kit release notes](https://developers.google.com/ml-kit/release-notes) and [bundled scanner guide](https://developers.google.com/ml-kit/vision/barcode-scanning/android) still list bundled barcode-scanning 17.3.0. It was retained to preserve bundled offline decoding. AGP is 9.4.1 and CameraX is 1.4.1; the measured 64-bit packaged libraries already meet the alignment check. No speculative dependency rewrite was used to suppress a warning.
+
+## Artifact and credentials
+
+Release manifest inspection found no debug recovery Activity/instrumentation, no debuggable flag and backup disabled. R8 mapping contained no RecoveryProbeInstrumentation, RecoveryStateActivity or mock payment engine. Mock implementation stays under src/test. Manifest has CALL_PHONE, CAMERA, transitive ACCESS_NETWORK_STATE and the private receiver signature permission; no INTERNET, SMS, contacts, location or broad storage permission. The AccessibilityService is system-permission guarded; app session broadcasts are non-exported and package-scoped. Other exported framework components retain dependency-provided signature guards.
+
+keystore.properties is ignored and untracked; git history queries for signing property/keystore paths returned no tracked history in the available repository. Secret values were not printed. This limited check is not proof about past copies, external shares or compromise. Signing custody/exposure review remains an owner responsibility; rotate/revoke only on established exposure and an approved recovery plan.
+
+Current [Play target requirements](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en) require API 36 for this app's submission. Target SDK is now 36, compiled with the installed official SDK 37 (minimum remains 26). The Android 36 SDK download failed because C: was full; only the two verified newly-created failed-install directories were removed. A compile-37 lint internal error cleared in a fresh process with temporary files on D:. Final complete validation passed without suppressing lint or reducing the gate. Platform behavior review includes edge-to-edge, back navigation and recreation. Other devices/form factors and store review remain unqualified.
+
+## Gap-closure final artifact — 3 November 2026
+
+After the minimal session-guard and Help/security-copy corrections, debug/release/test builds and release lint passed again (0 errors, 41 warnings, 1 hint). Signature, ZIP alignment, all 8 packaged 64-bit ELF libraries, backup-disabled/no-INTERNET manifest and absence of mock/recovery/instrumentation/signing files passed. No app-owned development endpoint or synthetic transaction seed exists in main Kotlin source. Vendor SDK endpoints are not claimed absent from all dependency binaries. Release SHA-256: 0D5AA70F4EACB41663A4A073933073665C83720A779532F238471568F3A2FB41. Real 16 KB execution is still NOT TESTED; see COMPATIBILITY_QUALIFICATION.md for the official image and observed host acceleration prerequisite. No native binary was patched.
+
+Public certificate-digest comparison confirmed that debug and release signing identities differ. The Redmi physical/instrumented checks use the debug build; shrunk-release runtime is NOT TESTED. No release-over-debug uninstall or data clear was attempted because that would destroy local keys/data and the real unresolved guard. Production distribution requires an approved signing/upgrade/protected-data migration and reconciliation plan. Do not re-sign production with a debug key or claim a static release build proves runtime compatibility.

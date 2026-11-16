@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">మీరు ఏమి చేయాలనుకుంటున్నారు?</string>
+    <string name="scan_pay">స్కాన్ చేసి చెల్లించండి</string>
+    <string name="scan_pay_sub">ఏదైనా UPI QR కోడ్‌ను స్కాన్ చేయండి</string>
+    <string name="check_balance">బ్యాలెన్స్ చూడండి</string>
+    <string name="check_balance_sub">*99# ద్వారా బ్యాంక్ బ్యాలెన్స్ చూడండి</string>
+    <string name="tab_home">హోమ్</string>
+    <string name="tab_transactions">లావాదేవీలు</string>
+    <string name="tab_receive">స్వీకరించండి</string>
+    <string name="tab_profile">ప్రొఫైల్</string>
+</resources>

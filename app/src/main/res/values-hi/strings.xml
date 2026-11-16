@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">आप क्या करना चाहेंगे?</string>
+    <string name="scan_pay">स्कैन करें और भुगतान करें</string>
+    <string name="scan_pay_sub">कोई भी UPI QR कोड स्कैन करें</string>
+    <string name="check_balance">बैलेंस जांचें</string>
+    <string name="check_balance_sub">*99# से बैंक बैलेंस जांचें</string>
+    <string name="tab_home">होम</string>
+    <string name="tab_transactions">लेनदेन</string>
+    <string name="tab_receive">प्राप्त करें</string>
+    <string name="tab_profile">प्रोफ़ाइल</string>
+</resources>

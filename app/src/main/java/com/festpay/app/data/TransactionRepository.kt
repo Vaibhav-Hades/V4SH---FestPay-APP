@@ -1,4 +1,3 @@
-// File: TransactionRepository.kt
 package com.festpay.app.data
 
 import android.content.Context
@@ -7,66 +6,33 @@ import com.festpay.app.ui.viewmodel.TransactionRecord
 import org.json.JSONArray
 import org.json.JSONObject
 
-class TransactionRepository(context: Context) {
-    private val prefs = context.getSharedPreferences("v4sh_transactions_pref", Context.MODE_PRIVATE)
+class TransactionRepository(context: Context, preferencesName: String = "v4sh_transactions_pref") {
+    private val protected = ProtectedPreferences(context, preferencesName)
 
     fun loadTransactions(): List<TransactionRecord> {
-        val jsonStr = prefs.getString("transactions_list", "[]") ?: "[]"
-        val list = mutableListOf<TransactionRecord>()
-        try {
-            val jsonArray = JSONArray(jsonStr)
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                val stateName = obj.optString("state", "UNKNOWN")
-                val state = try {
-                    PaymentState.valueOf(stateName)
-                } catch (_: Exception) {
-                    PaymentState.UNKNOWN
-                }
-                list.add(
-                    TransactionRecord(
-                        localTransactionId = obj.optString("id"),
-                        timestamp = obj.optString("timestamp"),
-                        payeeName = obj.optString("payeeName"),
-                        payeeVpa = obj.optString("payeeVpa"),
-                        amount = obj.optString("amount"),
-                        currency = obj.optString("currency", "INR"),
-                        state = state
-                    )
-                )
+        val records = protected.snapshot().getJSONArray("transactions_list")
+        return buildList {
+            for (index in 0 until records.length()) {
+                val value = records.getJSONObject(index)
+                add(TransactionRecord(value.getString("id"), if (value.isNull("timestamp")) "" else value.getString("timestamp"),
+                    value.optString("payeeName"), value.getString("payeeVpa"), value.getString("amount"), value.optString("currency", "INR"), PaymentState.UNKNOWN))
             }
-        } catch (_: Exception) {}
-        return list
+        }
     }
 
-    fun saveTransactions(records: List<TransactionRecord>) {
-        try {
-            val jsonArray = JSONArray()
-            for (record in records) {
-                val obj = JSONObject().apply {
-                    put("id", record.localTransactionId)
-                    put("timestamp", record.timestamp)
-                    put("payeeName", record.payeeName)
-                    put("payeeVpa", record.payeeVpa)
-                    put("amount", record.amount)
-                    put("currency", record.currency)
-                    put("state", record.state.name)
-                }
-                jsonArray.put(obj)
-            }
-            prefs.edit().putString("transactions_list", jsonArray.toString()).apply()
-        } catch (_: Exception) {}
+    fun saveTransactions(records: List<TransactionRecord>): Boolean = protected.update { value ->
+        value.put("transactions_list", JSONArray().apply {
+            records.forEach { record -> put(JSONObject().apply {
+                put("id", record.localTransactionId); put("timestamp", record.timestamp); put("payeeName", record.payeeName)
+                put("payeeVpa", record.payeeVpa); put("amount", record.amount); put("currency", record.currency); put("state", "UNKNOWN")
+            }) }
+        })
     }
 
-    fun loadUserVpa(): String {
-        return prefs.getString("user_vpa", "vaibhav@upi") ?: "vaibhav@upi"
-    }
-
-    fun loadUserName(): String {
-        return prefs.getString("user_name", "YMS Vaibhav") ?: "YMS Vaibhav"
-    }
-
-    fun saveUserProfile(vpa: String, name: String) {
-        prefs.edit().putString("user_vpa", vpa).putString("user_name", name).apply()
+    fun loadUserVpa(): String = protected.snapshot().getString("user_vpa")
+    fun loadUserName(): String = protected.snapshot().getString("user_name")
+    fun saveUserProfile(vpa: String, name: String): Boolean = protected.update {
+        val profile = PaymentInputValidator.profile(vpa, name) ?: throw ProtectedStorageException()
+        it.put("user_vpa", profile.vpa).put("user_name", profile.name)
     }
 }

@@ -17,17 +17,19 @@ import com.festpay.app.ui.theme.V4SHTheme
  */
 @Composable
 fun MainNavHost(navController: NavHostController) {
+    val paymentViewModel: com.festpay.app.ui.viewmodel.PaymentViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     V4SHTheme {
         NavHost(navController = navController, startDestination = "home") {
             // Top-level destinations (Phase-1 Bottom Navigation)
-            composable("home") { HomeScreen(navController) }
-            composable("transactions") { TransactionsScreen(navController) }
-            composable("receive_money") { ReceiveMoneyScreen(navController) }
-            composable("profile") { ProfileScreen(navController) }
+            composable("home") { HomeScreen(navController, paymentViewModel) }
+            composable("transactions") { TransactionsScreen(navController, paymentViewModel) }
+            composable("receive_money") { ReceiveMoneyScreen(navController, paymentViewModel) }
+            composable("profile") { ProfileScreen(navController, paymentViewModel) }
 
             // Account / Information & Check Balance screens
-            composable("upi_details") { UpiDetailsScreen(navController) }
-            composable("check_balance") { CheckBalanceScreen(navController) }
+            composable("upi_details") { UpiDetailsScreen(navController, paymentViewModel) }
+            composable("check_balance") { CheckBalanceScreen(navController, paymentViewModel) }
+            composable("upi_payment") { UpiIdPaymentScreen(navController) }
             composable("app_security") { AppSecurityScreen(navController) }
             composable("privacy") { PrivacyScreen(navController) }
             composable("help_center") { HelpCenterScreen(navController) }
@@ -38,8 +40,14 @@ fun MainNavHost(navController: NavHostController) {
 
             // Setup flow
             composable("welcome_setup") { WelcomeSetupScreen(navController) }
-            composable("payment_readiness") { PaymentReadinessScreen(navController) }
-            composable("payment_access_setup") { PaymentAccessSetupScreen(navController) }
+            composable("sleep_mode") { SleepModeScreen(navController) }
+            composable("spending") { SpendingScreen(navController, paymentViewModel) }
+            composable("language") { LanguageScreen(navController) }
+            composable("demo") { DemoPaymentScreen(navController) }
+            composable("bank_setup") { BankSetupScreen(navController) }
+            composable("guided_setup") { GuidedSetupScreen(navController) }
+            composable("payment_readiness") { PaymentReadinessScreen(navController, paymentViewModel) }
+            composable("payment_access_setup") { PaymentAccessSetupScreen(navController, paymentViewModel) }
             composable("payment_sim_selection") { PaymentSimSelectionScreen(navController) }
 
             // Batch 2 & 3: QR + Recipient + Amount Flow
@@ -49,17 +57,11 @@ fun MainNavHost(navController: NavHostController) {
             composable("unsupported_qr_code") { UnsupportedQrCodeScreen(navController) }
             composable("payment_details_missing") { PaymentDetailsMissingScreen(navController) }
             composable("qr_recipient") { QrRecipientScreen(navController) }
-            composable("amount_entry") { AmountEntryScreen(navController) }
-            composable("review_payment") { ReviewPaymentScreen(navController) }
+            composable("payment_progress") { PaymentProgressScreen(navController) }
+            composable("amount_entry") { AmountEntryScreen(navController, paymentViewModel) }
 
             // Batch 4 & 5A: Payment Engine Terminal States & Real USSD
-            composable("payment_in_progress") { PaymentInProgressScreen(navController) }
-            composable("payment_successful") { PaymentSuccessfulScreen(navController) }
-            composable("payment_failed") { PaymentFailedScreen(navController) }
-            composable("payment_status_unclear") { PaymentStatusUnclearScreen(navController) }
-            composable("payment_cancelled") { PaymentCancelledScreen(navController) }
-            composable("authentication_required") { AuthenticationRequiredScreen(navController) }
-            composable("transaction_details") { TransactionDetailsScreen(navController) }
+            composable("transaction_details") { TransactionDetailsScreen(navController, paymentViewModel) }
         }
     }
 }

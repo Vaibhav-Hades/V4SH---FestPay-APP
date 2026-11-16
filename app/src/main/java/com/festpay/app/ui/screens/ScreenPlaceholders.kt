@@ -1,7 +1,10 @@
 // File: ScreenPlaceholders.kt
 package com.festpay.app.ui.screens
+import kotlinx.coroutines.launch
 
 import android.Manifest
+import android.content.Intent
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +47,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
 import com.festpay.app.ui.theme.V4SHTheme
 import com.festpay.app.ui.viewmodel.PaymentScenario
@@ -50,42 +56,74 @@ import com.festpay.app.ui.viewmodel.PaymentState
 import com.festpay.app.ui.viewmodel.PaymentViewModel
 import com.festpay.app.ui.viewmodel.TransactionRecord
 import com.festpay.app.FestPayAccessibilityService
-import kotlinx.coroutines.delay
+import com.festpay.app.data.TransactionPresentation
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.net.URLDecoder
 
 // ----- Design System Colors & Constants -----
-private val PrimaryBurgundy = Color(0xFF3D0C1A)
-private val SecondaryUmber = Color(0xFF8C6A58)
-private val SurfaceCream = Color(0xFFFFF8F0)
-private val SurfaceCreamAlt = Color(0xFFF9F9F9)
+internal val PrimaryBurgundy = Color(0xFF3D0C1A)
+internal val SecondaryUmber = Color(0xFF8C6A58)
+internal val SurfaceCream = Color(0xFFFFF8F0)
 private val SurfaceWelcomeGradientStart = Color(0xFFFFF9F5)
 private val SurfaceWelcomeGradientEnd = Color(0xFFFAF1EB)
-private val SurfaceCardLowest = Color(0xFFFFFFFF)
+internal val SurfaceCardLowest = Color(0xFFFFFFFF)
 private val SurfaceCardLow = Color(0xFFF3F3F4)
 private val SurfaceContainerHigh = Color(0xFFE8E8E8)
-private val OnSurfaceDark = Color(0xFF1A1C1C)
-private val OnSurfaceVariant = Color(0xFF524345)
+internal val OnSurfaceDark = Color(0xFF1A1C1C)
+internal val OnSurfaceVariant = Color(0xFF524345)
 private val OutlineBorder = Color(0xFFEFE7DE)
-private val OutlineBorderWarm = Color(0xFFE8DDD2)
+internal val OutlineBorderWarm = Color(0xFFE8DDD2)
 
-private val cardShape = RoundedCornerShape(12.dp)
-private val largeCardShape = RoundedCornerShape(16.dp)
-private val pillShape = RoundedCornerShape(9999.dp)
-private val spacing = 20.dp
+internal val cardShape = RoundedCornerShape(12.dp)
+internal val largeCardShape = RoundedCornerShape(16.dp)
+internal val pillShape = RoundedCornerShape(9999.dp)
+internal val spacing = 20.dp
 
 // Global developer debug mode state
-var isDebugControlsVisible by mutableStateOf(false)
+
+var lastQrIssue by mutableStateOf(com.festpay.app.data.QrIssue.NONE)
 
 // ----- Shared Payment State for Scanned Data -----
 object SharedPaymentState {
-    var payeeVpa: String = ""
-    var payeeName: String = ""
-    var paymentAmount: String = ""
-    var paymentNote: String = ""
+    private val draft = com.festpay.app.data.PaymentPreparation()
+    var isMobilePayment = false
+    val recipient get() = draft.recipient
+    val selectionId get() = draft.selectionId
+    val payeeVpa get() = recipient.upiId
+    val payeeName get() = recipient.displayName
+    var paymentAmount: String
+        get() = draft.amount
+        set(value) { draft.editAmount(value) }
+    var paymentNote: String
+        get() = draft.note
+        set(value) { draft.editNote(value) }
+    fun selectRecipient(vpa: String, amount: String = "", note: String = "", qrSuppliedName: String? = null) = draft.select(vpa, amount, note, qrSuppliedName)
+    fun clear() { isMobilePayment = false; draft.clear() }
+    suspend fun resolve(ticket: com.festpay.app.data.BeneficiaryQuery) = draft.resolve(ticket)
+    fun review() = draft.review()
+    fun isCurrent(review: com.festpay.app.data.ReviewedPayment) = draft.isCurrent(review)
+}
+
+@Composable
+fun RecipientVerificationNotice(recipient: com.festpay.app.data.PaymentRecipient) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    recipient.nameSourceLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    Text(com.festpay.app.data.UiPresentation.verificationLabel(recipient.verificationStatus), style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
+    if (recipient.verificationStatus == com.festpay.app.data.VerificationStatus.VERIFIED) {
+        Text("Verification source: ${recipient.verificationSource}", style = MaterialTheme.typography.bodySmall)
+    } else {
+        Text(when (recipient.verificationStatus) {
+            com.festpay.app.data.VerificationStatus.PENDING -> "Waiting for authorized beneficiary validation."
+            com.festpay.app.data.VerificationStatus.INVALID_UPI_ID -> "Enter a valid UPI ID. Local syntax checks do not prove the account exists."
+            com.festpay.app.data.VerificationStatus.ERROR -> "Beneficiary validation could not be completed. No verified name is available. Independently check the UPI ID."
+            else -> "No authorized beneficiary-validation source is connected. Independently check the UPI ID before proceeding."
+        }, style = MaterialTheme.typography.bodySmall)
+    }
+    }
 }
 
 // ----- UPI URI Parser & Validator -----
@@ -98,57 +136,21 @@ sealed class UpiParseResult {
 }
 
 fun parseAndValidateUpiQr(rawValue: String): UpiParseResult {
-    SharedPaymentState.paymentAmount = ""
-    SharedPaymentState.paymentNote = ""
+    SharedPaymentState.clear()
 
-    val trimmed = rawValue.trim()
-    Log.d("V4SH_QR", "QR detected and evaluated")
-
-    val uri = try {
-        Uri.parse(trimmed)
-    } catch (e: Exception) {
-        null
+    val analysis = com.festpay.app.data.UpiQrParser.analyze(rawValue)
+    lastQrIssue = analysis.issue
+    Log.d("V4SH_QR", "QR_PARSE_RESULT=${analysis.issue.name}")
+    val result = analysis.value ?: return when (analysis.issue) {
+        com.festpay.app.data.QrIssue.UNSUPPORTED_SCHEME, com.festpay.app.data.QrIssue.UNSUPPORTED_ACTION,
+        com.festpay.app.data.QrIssue.UNSUPPORTED_CURRENCY -> UpiParseResult.UnsupportedFormat
+        com.festpay.app.data.QrIssue.MISSING_RECIPIENT -> UpiParseResult.MissingDetails
+        else -> UpiParseResult.InvalidFormat
     }
-
-    val isUpiUri = uri?.scheme?.lowercase() == "upi" || trimmed.lowercase().startsWith("upi://") || trimmed.contains("pa=")
-    if (!isUpiUri) {
-        Log.d("V4SH_QR", "QR rejected: non-UPI or unrecognized format")
-        return UpiParseResult.NonUpiQr
-    }
-
-    val pa = uri?.getQueryParameter("pa") ?: extractParam(trimmed, "pa")
-    val pn = uri?.getQueryParameter("pn") ?: extractParam(trimmed, "pn")
-    val am = uri?.getQueryParameter("am") ?: extractParam(trimmed, "am")
-    val cu = uri?.getQueryParameter("cu") ?: extractParam(trimmed, "cu")
-    val mc = uri?.getQueryParameter("mc") ?: extractParam(trimmed, "mc")
-    val tn = uri?.getQueryParameter("tn") ?: extractParam(trimmed, "tn")
-
-    if (pa.isNullOrBlank()) {
-        Log.d("V4SH_QR", "QR rejected: missing payee VPA")
-        return UpiParseResult.MissingDetails
-    }
-
-    if (!pa.contains("@")) {
-        Log.d("V4SH_QR", "QR rejected: invalid VPA format")
-        return UpiParseResult.InvalidFormat
-    }
-
-    if (cu != null && cu.uppercase() != "INR") {
-        Log.d("V4SH_QR", "QR rejected: unsupported currency")
-        return UpiParseResult.UnsupportedFormat
-    }
-
-    if (!am.isNullOrBlank()) {
-        SharedPaymentState.paymentAmount = am.trim()
-    }
-    if (!tn.isNullOrBlank()) {
-        SharedPaymentState.paymentNote = tn.trim()
-    }
-
-    Log.d("V4SH_QR", "UPI QR validated successfully")
-    return UpiParseResult.Valid(pa = pa.trim(), pn = pn?.trim(), am = am?.trim(), cu = cu?.trim(), mc = mc?.trim())
+    SharedPaymentState.selectRecipient(result.vpa, result.amount.orEmpty(), result.note.orEmpty(), result.name)
+    // Retain QR pn separately; it is never a verified bank beneficiary name.
+    return UpiParseResult.Valid(result.vpa, result.name, result.amount, result.currency, null)
 }
-
 private fun extractParam(url: String, paramName: String): String? {
     return try {
         val regex = Regex("$paramName=([^&]+)", RegexOption.IGNORE_CASE)
@@ -161,7 +163,7 @@ private fun extractParam(url: String, paramName: String): String? {
 
 // ---------- Shared Top App Bar Component ----------
 @Composable
-private fun V4shTopBar(
+internal fun V4shTopBar(
     title: String = "",
     onBack: (() -> Unit)? = null,
     onAction: (() -> Unit)? = null
@@ -207,10 +209,42 @@ private fun V4shTopBar(
 // ==========================================
 
 @Composable
-fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
+private fun RefreshHistoryOnResume(paymentViewModel: PaymentViewModel) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        paymentViewModel.initRepository(context)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(paymentViewModel, context, lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) paymentViewModel.refreshTransactionHistory(context)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+}
+
+@Composable
+fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
+    RefreshHistoryOnResume(paymentViewModel)
+    val homeContext = LocalContext.current
+    val homeLifecycle = LocalLifecycleOwner.current.lifecycle
+    var readiness by remember { mutableStateOf<com.festpay.app.data.HomeReadiness?>(null) }
+    DisposableEffect(paymentViewModel, homeContext, homeLifecycle) {
+        fun refresh() {
+            paymentViewModel.inspectPaymentReadiness(homeContext)
+            val block = paymentViewModel.preparationBlock
+            readiness = com.festpay.app.data.HomeReadinessEvaluator.evaluate(
+                storageOk = block != com.festpay.app.ui.viewmodel.PreparationBlock.STORAGE,
+                earlierHistory = block == com.festpay.app.ui.viewmodel.PreparationBlock.EARLIER_HISTORY,
+                unresolvedAttempt = block == com.festpay.app.ui.viewmodel.PreparationBlock.UNRESOLVED_ATTEMPT,
+                consent = com.festpay.app.data.AccessibilityConsent.accepted(homeContext),
+                phonePermission = ContextCompat.checkSelfPermission(homeContext, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED,
+                accessibilityConnected = com.festpay.app.data.AccessibilityRuntime.connection.snapshot.connected,
+                cellularBlock = com.festpay.app.data.CellularReadinessReader.read(homeContext).launchBlock
+            )
+        }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
+        homeLifecycle.addObserver(observer)
+        refresh()
+        onDispose { homeLifecycle.removeObserver(observer) }
     }
 
     V4SHTheme {
@@ -218,7 +252,7 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(SurfaceCreamAlt)
+                    .background(SurfaceCream)
                     .padding(innerPadding)
                     .padding(horizontal = spacing),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -233,7 +267,7 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Good morning, ${paymentViewModel.userName.split(" ").firstOrNull() ?: "Vaibhav"}.",
+                                text = com.festpay.app.data.UiPresentation.greeting(java.time.LocalTime.now().hour, paymentViewModel.userName),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = SecondaryUmber,
                                     fontWeight = FontWeight.Medium
@@ -251,14 +285,14 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                                 ) {
                                     Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF2B4C3F)))
                                     Text(
-                                        text = "Mobile Network Active",
+                                        text = "Offline tools",
                                         style = MaterialTheme.typography.labelSmall.copy(color = Color(0xFF2B4C3F), fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                     )
                                 }
                             }
                         }
                         Text(
-                            text = "What would you like to do?",
+                            text = androidx.compose.ui.res.stringResource(com.festpay.app.R.string.home_title),
                             style = MaterialTheme.typography.headlineLarge.copy(
                                 color = PrimaryBurgundy,
                                 fontWeight = FontWeight.Normal
@@ -303,14 +337,14 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                                 }
                                 Column {
                                     Text(
-                                        text = "Scan & Pay",
+                                        text = androidx.compose.ui.res.stringResource(com.festpay.app.R.string.scan_pay),
                                         style = MaterialTheme.typography.headlineSmall.copy(
                                             color = Color.White,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     )
                                     Text(
-                                        text = "Scan any UPI QR code",
+                                        text = androidx.compose.ui.res.stringResource(com.festpay.app.R.string.scan_pay_sub),
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = Color.White.copy(alpha = 0.8f)
                                         ),
@@ -329,13 +363,49 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                 }
 
                 item {
+                    val state = readiness
+                    if (state != null) {
+                        val dot = when (state.state) {
+                            com.festpay.app.data.HomeReadinessState.READY -> Color(0xFF2B4C3F)
+                            com.festpay.app.data.HomeReadinessState.SETUP_NEEDED -> Color(0xFF8C5815)
+                            com.festpay.app.data.HomeReadinessState.BLOCKED -> Color(0xFF93000A)
+                        }
+                        val homeContext = androidx.compose.ui.platform.LocalContext.current
+                        Card(
+                            shape = largeCardShape,
+                            colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                // When Accessibility is the only thing missing, go straight to Android's switch.
+                                val onlyAccessibility = state.state == com.festpay.app.data.HomeReadinessState.SETUP_NEEDED &&
+                                    state.detail.contains("Accessibility settings")
+                                if (!(onlyAccessibility && com.festpay.app.data.IssueLog.openAccessibilitySettings(homeContext))) navController.navigate("payment_readiness")
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(dot))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(state.headline, style = MaterialTheme.typography.labelLarge.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
+                                    Text(state.detail, style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                                }
+                                Icon(Icons.Default.ChevronRight, contentDescription = "Open payment readiness", tint = SecondaryUmber)
+                            }
+                        }
+                    }
+                }
+
+                item {
                     Card(
                         shape = largeCardShape,
                         colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { navController.navigate("check_balance") }
+                            .clickable { com.festpay.app.data.BalanceQuick.request(); navController.navigate("check_balance") }
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -345,8 +415,8 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = PrimaryBurgundy)
                                 Column {
-                                    Text("Check Balance", style = MaterialTheme.typography.labelLarge.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
-                                    Text("Check bank balance via *99#", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                                    Text(androidx.compose.ui.res.stringResource(com.festpay.app.R.string.check_balance), style = MaterialTheme.typography.labelLarge.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
+                                    Text(androidx.compose.ui.res.stringResource(com.festpay.app.R.string.check_balance_sub), style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
                                 }
                             }
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = SecondaryUmber)
@@ -354,9 +424,12 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                     }
                 }
 
+                item { AutoSleepNote() }
+                item { PayAgainRow(navController, paymentViewModel) }
+
                 item {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Card(
@@ -365,8 +438,8 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(142.dp)
-                                .clickable { navController.navigate("upi_details") }
+                                .heightIn(min = 142.dp).fillMaxHeight()
+                                .clickable { navController.navigate("upi_payment") }
                         ) {
                             Column(
                                 modifier = Modifier.padding(16.dp).fillMaxSize(),
@@ -393,7 +466,7 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(142.dp)
+                                .heightIn(min = 142.dp).fillMaxHeight()
                                 .clickable { navController.navigate("receive_money") }
                         ) {
                             Column(
@@ -417,31 +490,6 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                     }
                 }
 
-                item {
-                    Card(
-                        shape = largeCardShape,
-                        colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { navController.navigate("check_balance") }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = PrimaryBurgundy)
-                                Column {
-                                    Text("Check Balance", style = MaterialTheme.typography.labelLarge.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
-                                    Text("Check bank balance via *99#", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
-                                }
-                            }
-                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = SecondaryUmber)
-                        }
-                    }
-                }
 
                 item {
                     Row(
@@ -457,7 +505,10 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                 }
 
                 val recentLedger = paymentViewModel.transactionLedger.take(5)
-                if (recentLedger.isEmpty()) {
+                paymentViewModel.historyError?.let { message ->
+                    item { Text(message, color = MaterialTheme.colorScheme.error) }
+                }
+                if (recentLedger.isEmpty() && paymentViewModel.historyError == null) {
                     item {
                         Card(
                             shape = largeCardShape,
@@ -477,7 +528,7 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
                     }
                 } else {
                     items(recentLedger) { record ->
-                        TransactionRecordRowItem(record)
+                        TransactionRecordRowItem(record) { paymentViewModel.selectedAttemptId = record.localTransactionId; navController.navigate("transaction_details") }
                     }
                 }
 
@@ -488,12 +539,12 @@ fun HomeScreen(navController: NavHostController, paymentViewModel: PaymentViewMo
 }
 
 @Composable
-private fun TransactionRecordRowItem(item: TransactionRecord) {
+private fun TransactionRecordRowItem(item: TransactionRecord, onClick: () -> Unit = {}) {
     Card(
         shape = largeCardShape,
         colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
@@ -509,16 +560,22 @@ private fun TransactionRecordRowItem(item: TransactionRecord) {
                     modifier = Modifier.size(40.dp).clip(CircleShape).background(SurfaceCardLow),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Storefront, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(20.dp))
+                    if (item.payeeName.isNotBlank()) Text(com.festpay.app.data.UiPresentation.initial(item.payeeName), style = MaterialTheme.typography.titleMedium.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
+                    else Icon(Icons.Default.Storefront, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(20.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(item.payeeName, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = PrimaryBurgundy), maxLines = 1)
-                    Text(item.timestamp, style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                    Text(com.festpay.app.data.UiPresentation.payeeTitle(item.payeeName, item.payeeVpa), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = PrimaryBurgundy),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(com.festpay.app.data.UiPresentation.shortTimestamp(item.timestamp), style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 150.dp)) {
                 Text("₹${item.amount}", style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
-                val (bg, txt, label) = when (item.state) {
+                val ownerLabel = com.festpay.app.data.UiPresentation.ownerResolutionLabel(item.ownerResolution)
+                val carrierBadge = com.festpay.app.data.UiPresentation.carrierResultBadge(item.carrierResult)
+                val closedLabel = com.festpay.app.data.UiPresentation.carrierOutcomeLabel(item.carrierOutcome)
+                val unconfirmed = item.noCarrierConfirmation && item.ownerResolution == null && closedLabel == null
+                val (bg, txt, label) = if (unconfirmed) Triple(Color(0xFFFBEBEB), Color(0xFF93000A), "Unsuccessful · not confirmed by carrier") else if (closedLabel != null) (if (item.carrierOutcome == "SUCCESS") Triple(Color(0xFFEBF2EE), Color(0xFF2B4C3F), closedLabel) else Triple(Color(0xFFFBEBEB), Color(0xFF93000A), closedLabel)) else if (ownerLabel != null) Triple(Color(0xFFF3F3F4), Color(0xFF524345), ownerLabel) else if (carrierBadge != null) Triple(Color(0xFFF3F3F4), Color(0xFF524345), carrierBadge) else when (com.festpay.app.data.PaymentIntegrityPolicy.restoredState(item.state)) {
                     PaymentState.SUCCESS -> Triple(Color(0xFFEBF2EE), Color(0xFF2B4C3F), "Confirmed & Settled")
                     PaymentState.FAILED -> Triple(Color(0xFFFBEBEB), Color(0xFF93000A), "Failed")
                     else -> Triple(Color(0xFFFBF3E8), Color(0xFF8C5815), "Payment status unclear")
@@ -526,6 +583,7 @@ private fun TransactionRecordRowItem(item: TransactionRecord) {
                 Surface(shape = RoundedCornerShape(6.dp), color = bg, modifier = Modifier.padding(top = 4.dp)) {
                     Text(
                         text = label,
+                        textAlign = TextAlign.End,
                         color = txt,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -539,16 +597,14 @@ private fun TransactionRecordRowItem(item: TransactionRecord) {
 @Composable
 fun TransactionsScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        paymentViewModel.initRepository(context)
-    }
+    RefreshHistoryOnResume(paymentViewModel)
 
     V4SHTheme {
         Scaffold { innerPadding ->
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(SurfaceCreamAlt)
+                    .background(SurfaceCream)
                     .padding(innerPadding)
                     .padding(horizontal = spacing),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -556,9 +612,13 @@ fun TransactionsScreen(navController: NavHostController, paymentViewModel: Payme
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(text = "Transactions", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                    Text(text = "Payments initiated through V4SH", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+                    Text(text = "Local payment attempts, not a bank statement. Taps blocked before initiation do not create new attempts.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+                    TextButton(onClick = { paymentViewModel.refreshTransactionHistory(context) }) { Text("Refresh history") }
                 }
-                if (paymentViewModel.transactionLedger.isEmpty()) {
+                paymentViewModel.historyError?.let { message ->
+                    item { Text(message, color = MaterialTheme.colorScheme.error) }
+                }
+                if (paymentViewModel.transactionLedger.isEmpty() && paymentViewModel.historyError == null) {
                     item {
                         Card(
                             shape = largeCardShape,
@@ -578,7 +638,7 @@ fun TransactionsScreen(navController: NavHostController, paymentViewModel: Payme
                     }
                 } else {
                     items(paymentViewModel.transactionLedger) { record ->
-                        TransactionRecordRowItem(record)
+                        TransactionRecordRowItem(record) { paymentViewModel.selectedAttemptId = record.localTransactionId; navController.navigate("transaction_details") }
                     }
                 }
                 item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -590,6 +650,8 @@ fun TransactionsScreen(navController: NavHostController, paymentViewModel: Payme
 @Composable
 fun ReceiveMoneyScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
     val context = LocalContext.current
+    var requestAmount by remember { mutableStateOf("") }
+    val requestedAmount = com.festpay.app.data.PaymentInputValidator.amount(requestAmount)
     LaunchedEffect(Unit) {
         paymentViewModel.initRepository(context)
     }
@@ -616,18 +678,38 @@ fun ReceiveMoneyScreen(navController: NavHostController, paymentViewModel: Payme
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Box(
                             modifier = Modifier.size(200.dp).clip(cardShape).background(SurfaceCardLow),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.QrCode2, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(120.dp))
+                            if (paymentViewModel.profileAvailable) {
+                                ReceiveAccountQr(paymentViewModel.userVpa, paymentViewModel.userName, requestedAmount)
+                            } else Text("Saved UPI details are unavailable. Check Profile; your data has not been reset.")
                         }
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(paymentViewModel.userName, style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
-                        Text(paymentViewModel.userVpa, style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                        Text(paymentViewModel.userName, style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold), textAlign = TextAlign.Center)
+                        Text(paymentViewModel.userVpa, style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(requestAmount, { requestAmount = it.filter { c -> c.isDigit() || c == '.' }.take(10) }, singleLine = true,
+                            label = { Text("Ask for an amount (optional)") }, isError = requestAmount.isNotEmpty() && requestedAmount == null,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                            supportingText = { Text(if (requestedAmount != null) "The QR now asks for ₹$requestedAmount." else "Leave empty for a QR that lets the payer type the amount.") },
+                            modifier = Modifier.fillMaxWidth())
+                        val shareable = paymentViewModel.profileAvailable && com.festpay.app.data.ReceiveQr.payload(paymentViewModel.userVpa, paymentViewModel.userName) != null
+                        if (shareable) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(onClick = {
+                                val label = paymentViewModel.userName.ifBlank { "me" }
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, "Pay $label" + (requestedAmount?.let { " ₹$it" } ?: "") + " on UPI: ${paymentViewModel.userVpa}" + (com.festpay.app.data.ReceiveQr.payload(paymentViewModel.userVpa, paymentViewModel.userName, requestedAmount)?.let { "\n$it" } ?: ""))
+                                }
+                                runCatching { context.startActivity(Intent.createChooser(send, "Share UPI ID")) }
+                            }, shape = largeCardShape) { Text("Share UPI ID") }
+                        }
                     }
                 }
 
@@ -688,7 +770,6 @@ fun ProfileScreen(navController: NavHostController, paymentViewModel: PaymentVie
                             .clickable {
                                 tapCount++
                                 if (tapCount >= 3) {
-                                    isDebugControlsVisible = !isDebugControlsVisible
                                     tapCount = 0
                                 }
                             },
@@ -729,6 +810,26 @@ fun ProfileScreen(navController: NavHostController, paymentViewModel: PaymentVie
                 Spacer(modifier = Modifier.height(8.dp))
                 ProfileMenuCard(title = "UPI Details", subtitle = "Your linked UPI ID & handle", icon = Icons.Default.AlternateEmail) {
                     navController.navigate("upi_details")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Advanced", subtitle = "Problems, fixes, permissions and Accessibility", icon = Icons.Default.Settings) {
+                    navController.navigate("payment_readiness")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Spending & export", subtitle = "Totals by month, top payees, CSV export", icon = Icons.Default.Settings) {
+                    navController.navigate("spending")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Language", subtitle = "English, हिन्दी, తెలుగు", icon = Icons.Default.Settings) {
+                    navController.navigate("language")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Try a demo", subtitle = "See a payment walk-through. No money, nothing saved", icon = Icons.Default.Settings) {
+                    navController.navigate("demo")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Sleep mode", subtitle = "Switch V4SH off so your banking apps are not disturbed", icon = Icons.Default.Lock) {
+                    navController.navigate("sleep_mode")
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -778,7 +879,7 @@ fun ProfileScreen(navController: NavHostController, paymentViewModel: PaymentVie
                             }
                             Column {
                                 Text("V4SH Fintech Interface", style = MaterialTheme.typography.labelLarge.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
-                                Text("Version 1.0.0 (Release Candidate)", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
+                                Text("Payment confirmation unavailable", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -828,13 +929,19 @@ private fun ProfileMenuCard(title: String, subtitle: String, icon: androidx.comp
 @Composable
 fun UpiDetailsScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
     val context = LocalContext.current
+    var vpaInput by rememberSaveable { mutableStateOf("") }
+    var nameInput by rememberSaveable { mutableStateOf("") }
+    var fieldsLoaded by rememberSaveable { mutableStateOf(false) }
+    var isSaved by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         paymentViewModel.initRepository(context)
+        if (!fieldsLoaded) {
+            vpaInput = paymentViewModel.userVpa
+            nameInput = paymentViewModel.userName
+            fieldsLoaded = true
+        }
     }
-
-    var vpaInput by remember { mutableStateOf(paymentViewModel.userVpa) }
-    var nameInput by remember { mutableStateOf(paymentViewModel.userName) }
-    var isSaved by remember { mutableStateOf(false) }
 
     V4SHTheme {
         Scaffold(
@@ -853,13 +960,13 @@ fun UpiDetailsScreen(navController: NavHostController, paymentViewModel: Payment
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(text = "Your UPI details", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text(text = "Configure your linked UPI payment handle.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                Text(text = "Save your own UPI ID for Receive. Saving it does not link or verify a bank account.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
 
                 OutlinedTextField(
                     value = nameInput,
-                    onValueChange = { nameInput = it },
+                    onValueChange = { nameInput = it; isSaved = false; saveError = null },
                     label = { Text("Display Name") },
-                    placeholder = { Text("YMS Vaibhav") },
+                    placeholder = { Text("Your name") },
                     shape = cardShape,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryBurgundy, unfocusedBorderColor = OutlineBorderWarm)
@@ -869,7 +976,7 @@ fun UpiDetailsScreen(navController: NavHostController, paymentViewModel: Payment
 
                 OutlinedTextField(
                     value = vpaInput,
-                    onValueChange = { vpaInput = it },
+                    onValueChange = { vpaInput = it; isSaved = false; saveError = null },
                     label = { Text("UPI ID / VPA") },
                     placeholder = { Text("username@upi") },
                     shape = cardShape,
@@ -881,10 +988,8 @@ fun UpiDetailsScreen(navController: NavHostController, paymentViewModel: Payment
 
                 Button(
                     onClick = {
-                        if (vpaInput.contains("@") && nameInput.isNotBlank()) {
-                            paymentViewModel.saveUserProfile(context, vpaInput.trim(), nameInput.trim())
-                            isSaved = true
-                        }
+                        isSaved = paymentViewModel.saveUserProfile(context, vpaInput, nameInput)
+                        saveError = paymentViewModel.profileSaveError
                     },
                     shape = largeCardShape,
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
@@ -892,6 +997,7 @@ fun UpiDetailsScreen(navController: NavHostController, paymentViewModel: Payment
                 ) {
                     Text(if (isSaved) "UPI Details Saved" else "Save UPI Details")
                 }
+                saveError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -906,7 +1012,7 @@ fun UpiDetailsScreen(navController: NavHostController, paymentViewModel: Payment
                     ) {
                         Icon(Icons.Default.AccountBalance, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(20.dp))
                         Text(
-                            text = "V4SH does not hold your money or create a wallet balance. Your UPI ID links directly to your bank account.",
+                            text = "V4SH generates a Receive QR from the UPI ID you provide. Verify that it is your own ID; V4SH cannot verify account ownership.",
                             style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceDark)
                         )
                     }
@@ -945,7 +1051,7 @@ fun AppSecurityScreen(navController: NavHostController) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(Icons.Default.Shield, contentDescription = null, tint = PrimaryBurgundy)
-                            Text("Security Status: Protected", style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
+                            Text("PIN handling", style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold))
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Your banking and payment credentials are never collected, processed, or retained in V4SH.", style = MaterialTheme.typography.bodyMedium.copy(color = OnSurfaceDark))
@@ -963,7 +1069,7 @@ fun AppSecurityScreen(navController: NavHostController) {
                             Icon(Icons.Default.ScreenLockPortrait, contentDescription = null, tint = PrimaryBurgundy)
                             Column {
                                 Text("Device Screen Lock", style = MaterialTheme.typography.labelLarge.copy(color = OnSurfaceDark, fontWeight = FontWeight.Bold))
-                                Text("V4SH uses system passcode or biometric gate to protect app access.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
+                                Text("V4SH has no separate app lock. Configure Android's screen lock to protect access to your device.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
                             }
                         }
                     }
@@ -978,7 +1084,7 @@ fun AppSecurityScreen(navController: NavHostController) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text("Authentication happens through your payment provider", style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("V4SH does not collect, store, or simulate your UPI PIN or banking passwords. V4SH will never ask for your UPI PIN, banking password, card PIN, CVV, or OTP. Every transaction is authenticated securely inside your payment provider's boundary.", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                        Text("V4SH does not collect, store, or simulate your UPI PIN or banking passwords. Enter your UPI PIN manually only on the carrier or payment provider's interface. V4SH cannot verify authentication or settlement and will never ask you to share your PIN, banking password, card PIN, CVV, or OTP.", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
                     }
                 }
 
@@ -990,7 +1096,6 @@ fun AppSecurityScreen(navController: NavHostController) {
 
 @Composable
 fun PrivacyScreen(navController: NavHostController) {
-    var clearedText by remember { mutableStateOf(false) }
 
     V4SHTheme {
         Scaffold(
@@ -1049,13 +1154,7 @@ fun PrivacyScreen(navController: NavHostController) {
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                OutlinedButton(
-                    onClick = { clearedText = true },
-                    shape = largeCardShape,
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                ) {
-                    Text(if (clearedText) "Local activity refreshed" else "Clear local activity cache", color = PrimaryBurgundy)
-                }
+                Text("Unresolved attempts are retained to prevent duplicate payments. Clearing cache does not resolve a payment. App backup and device-transfer backup are disabled for this data.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -1084,11 +1183,19 @@ fun HelpCenterScreen(navController: NavHostController) {
                 Text("How can we help?", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
                 Text("Find answers about payments, QR scanning, and connectivity.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 20.dp))
 
-                HelpTopicCard("Making a payment", "V4SH provides a camera scanner for standard UPI QR codes. Verify payee name and amount before continuing.")
+                HelpTopicCard("Making a payment", "V4SH prepares supported UPI QR or manually entered UPI ID requests. Review the recipient and amount. Preparation does not verify bank ownership or start a payment.")
                 Spacer(modifier = Modifier.height(8.dp))
-                HelpTopicCard("Payment status unclear", "Check your official bank SMS or ledger before re-initiating to avoid duplicate payments.")
+                HelpTopicCard("Payment status unclear", "V4SH could not receive a final confirmation from the payment service. Check your bank/UPI confirmation before trying again. Don't pay again yet. An unresolved attempt blocks another payment until you check your own bank record and mark it resolved in Transaction Details. V4SH cannot verify your answer.")
                 Spacer(modifier = Modifier.height(8.dp))
-                HelpTopicCard("No mobile network", "V4SH requires active mobile network connectivity to communicate payment requests.")
+                HelpTopicCard("Offline use", "QR preparation, Receive and local history work without internet. USSD balance checks require cellular signal and a supported bank-registered SIM, with airplane mode off. Wi-Fi and mobile data may remain off.")
+                Spacer(modifier = Modifier.height(8.dp))
+                HelpTopicCard("Check Balance and PIN", "V4SH assists the supported *99# menu. Enter your UPI PIN manually on the carrier interface only. V4SH does not read, store or enter it. A displayed balance does not prove any payment settled.")
+                Spacer(modifier = Modifier.height(8.dp))
+                HelpTopicCard("QR names", "A QR-supplied name comes from the payment request and is not independently verified by V4SH. A manually entered UPI ID is also unverified; check the recipient before authenticating.")
+                Spacer(modifier = Modifier.height(8.dp))
+                HelpTopicCard("Calling SIM", "Use the SIM registered with your bank. Android and the carrier control *99# routing. V4SH does not select or verify your bank SIM, and cannot guarantee dual-SIM routing, coverage or carrier support.")
+                Spacer(modifier = Modifier.height(8.dp))
+                HelpTopicCard("Sharing a support note", "Contact Support opens Android's share chooser when you choose to share a note. V4SH has no connected support inbox and does not create a ticket or confirm delivery. You choose the app and recipient; that app may need internet.")
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -1120,8 +1227,9 @@ private fun HelpTopicCard(title: String, body: String) {
 
 @Composable
 fun ContactSupportScreen(navController: NavHostController) {
+    val context = LocalContext.current
     var issueDesc by remember { mutableStateOf("") }
-    var submitted by remember { mutableStateOf(false) }
+    var shareError by remember { mutableStateOf(false) }
 
     V4SHTheme {
         Scaffold(
@@ -1140,7 +1248,7 @@ fun ContactSupportScreen(navController: NavHostController) {
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Need a hand?", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("Tell us what happened and we'll help you understand your V4SH payment experience.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 20.dp))
+                Text("Your note goes to V4SH support on 96180 99307 through your own SMS or WhatsApp app, only when you tap Send there. V4SH itself sends nothing. SMS charges from your SIM may apply.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 20.dp))
 
                 OutlinedTextField(
                     value = issueDesc,
@@ -1161,16 +1269,58 @@ fun ContactSupportScreen(navController: NavHostController) {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                var withDetails by remember { mutableStateOf(true) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = withDetails, onCheckedChange = { withDetails = it })
+                    Text("Add my phone model and V4SH settings (no names, UPI IDs, amounts or PINs)", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                val supportText = com.festpay.app.data.SupportContact.message(issueDesc, if (withDetails) problemReportText(context) else null)
+                Button(
+                    onClick = {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_SENDTO, android.net.Uri.parse(com.festpay.app.data.SupportContact.smsUri(supportText))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            shareError = false
+                        } catch (_: Exception) { shareError = true }
+                    },
+                    enabled = issueDesc.isNotBlank(),
+                    shape = largeCardShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                ) { Text("Send to V4SH support by SMS") }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.festpay.app.data.SupportContact.whatsAppUrl(supportText))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            shareError = false
+                        } catch (_: Exception) { shareError = true }
+                    },
+                    enabled = issueDesc.isNotBlank(),
+                    shape = largeCardShape,
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                ) { Text("Send on WhatsApp") }
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = { submitted = true },
+                    onClick = {
+                        try {
+                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "V4SH support note")
+                                putExtra(Intent.EXTRA_TEXT, issueDesc.trim())
+                            }, "Share support note"))
+                            shareError = false
+                        } catch (_: Exception) { shareError = true }
+                    },
+                    enabled = issueDesc.isNotBlank(),
                     shape = largeCardShape,
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
                     modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) {
-                    Text(if (submitted) "Support Request Logged" else "Submit Support Request")
+                    Text("Share support note")
                 }
+                if (shareError) Text("No sharing app could be opened. The note has not been sent.", color = MaterialTheme.colorScheme.error)
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -1204,13 +1354,13 @@ fun NoMobileNetworkScreen(navController: NavHostController) {
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("No Mobile Network", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("V4SH needs a mobile network connection to communicate with the payment service.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                Text("Cellular USSD requires signal and a supported bank-registered SIM. Mobile data and Wi-Fi are not required; QR preparation, Receive and saved history work offline.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
 
                 Card(shape = largeCardShape, colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text("No payment was started", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("V4SH could not begin the payment flow because a mobile network connection was unavailable.", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
+                        Text("If cellular service is unavailable, USSD cannot connect. This screen does not prove whether an earlier payment reached the bank; unresolved attempts remain blocked.", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant))
                     }
                 }
 
@@ -1263,7 +1413,7 @@ fun WelcomeSetupScreen(navController: NavHostController) {
                 Text("Your UPI. Your account. Your payment.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
 
                 Button(
-                    onClick = { navController.navigate("payment_readiness") },
+                    onClick = { navController.navigate("guided_setup") },
                     shape = largeCardShape,
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
                     modifier = Modifier.fillMaxWidth().height(52.dp)
@@ -1283,79 +1433,6 @@ fun WelcomeSetupScreen(navController: NavHostController) {
     }
 }
 
-@Composable
-fun PaymentReadinessScreen(navController: NavHostController) {
-    V4SHTheme {
-        Scaffold(
-            topBar = {
-                V4shTopBar(title = "Payment Readiness", onBack = { navController.popBackStack() })
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier.fillMaxSize().background(SurfaceCream).padding(innerPadding).padding(horizontal = spacing).verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text("Payment Readiness", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("Verify system readiness before making payments.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
-
-                Button(onClick = { navController.navigate("payment_access_setup") }, shape = largeCardShape, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy), modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    Text("Complete setup")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PaymentAccessSetupScreen(navController: NavHostController) {
-    V4SHTheme {
-        Scaffold(
-            topBar = {
-                V4shTopBar(title = "Payment Access", onBack = { navController.popBackStack() })
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier.fillMaxSize().background(SurfaceCream).padding(innerPadding).padding(horizontal = spacing).verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text("Payment Access Setup", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("Connect V4SH to your payment flow.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
-
-                Button(onClick = { navController.navigate("payment_sim_selection") }, shape = largeCardShape, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy), modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    Text("Open Android settings")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PaymentSimSelectionScreen(navController: NavHostController) {
-    V4SHTheme {
-        Scaffold(
-            topBar = {
-                V4shTopBar(title = "SIM Selection", onBack = { navController.popBackStack() })
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier.fillMaxSize().background(SurfaceCream).padding(innerPadding).padding(horizontal = spacing).verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text("Choose payment SIM", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("Select the bank-registered SIM for USSD execution.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
-
-                Button(onClick = { navController.navigate("home") }, shape = largeCardShape, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy), modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    Text("Confirm SIM")
-                }
-            }
-        }
-    }
-}
-
-
 // ==========================================
 // BATCH 3 & 4: QR SCANNING & PAYMENT ENGINE
 // ==========================================
@@ -1363,6 +1440,7 @@ fun PaymentSimSelectionScreen(navController: NavHostController) {
 @Composable
 fun QrScannerScreen(navController: NavHostController) {
     val context = LocalContext.current
+    val recipientScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -1384,7 +1462,26 @@ fun QrScannerScreen(navController: NavHostController) {
     }
 
     var scannedOnce by remember { mutableStateOf(false) }
+    var cameraActive by remember { mutableStateOf(false) }
+    var cameraError by remember { mutableStateOf(false) }
+    var scannerDisposed by remember { mutableStateOf(false) }
+    val scanner = remember { BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()) }
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scannedOnce = false
+                hasCameraPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    DisposableEffect(scanner) {
+        scannerDisposed = false
+        onDispose { scannerDisposed = true; scanner.close() }
+    }
 
     DisposableEffect(hasCameraPermission) {
         onDispose {
@@ -1397,7 +1494,7 @@ fun QrScannerScreen(navController: NavHostController) {
     V4SHTheme {
         Scaffold(
             topBar = {
-                V4shTopBar(title = "Scan & Pay", onBack = { navController.popBackStack() }, onAction = { /* Help */ })
+                V4shTopBar(title = "Scan & Pay", onBack = { navController.popBackStack() }, onAction = { navController.navigate("help_center") })
             }
         ) { innerPadding ->
             Column(
@@ -1433,6 +1530,8 @@ fun QrScannerScreen(navController: NavHostController) {
                                 val previewView = PreviewView(ctx)
                                 val executor = ContextCompat.getMainExecutor(ctx)
                                 cameraProviderFuture.addListener({
+                                    if (scannerDisposed) return@addListener
+                                    try {
                                     val cameraProvider = cameraProviderFuture.get()
                                     val preview = Preview.Builder().build().also {
                                         it.setSurfaceProvider(previewView.surfaceProvider)
@@ -1442,17 +1541,16 @@ fun QrScannerScreen(navController: NavHostController) {
                                         .build()
                                         .also { analysis ->
                                             analysis.setAnalyzer(executor) { imageProxy ->
-                                                processImageProxy(imageProxy) { rawValue ->
-                                                    if (!scannedOnce) {
+                                                processImageProxy(imageProxy, scanner) { rawValue ->
+                                                    if (!scannerDisposed && !scannedOnce && lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED) {
                                                         scannedOnce = true
                                                         when (val result = parseAndValidateUpiQr(rawValue)) {
                                                             is UpiParseResult.Valid -> {
-                                                                SharedPaymentState.payeeVpa = result.pa
-                                                                SharedPaymentState.payeeName = result.pn ?: "UPI Merchant"
-                                                                if (!result.am.isNullOrEmpty()) {
-                                                                    SharedPaymentState.paymentAmount = result.am
+                                                                val ticket = SharedPaymentState.selectRecipient(result.pa, result.am.orEmpty(), SharedPaymentState.paymentNote, result.pn)
+                                                                recipientScope.launch {
+                                                                    SharedPaymentState.resolve(ticket)
+                                                                    if (!scannerDisposed && SharedPaymentState.selectionId == ticket.requestId && lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED) navController.navigate("qr_recipient")
                                                                 }
-                                                                navController.navigate("qr_recipient")
                                                             }
                                                             is UpiParseResult.MissingDetails -> {
                                                                 navController.navigate("payment_details_missing")
@@ -1478,8 +1576,17 @@ fun QrScannerScreen(navController: NavHostController) {
                                             preview,
                                             imageAnalyzer
                                         )
+                                        cameraActive = true
+                                        cameraError = false
                                     } catch (e: Exception) {
-                                        Log.e("V4SH_QR", "Camera binding failed", e)
+                                        cameraActive = false
+                                        cameraError = true
+                                        Log.e("V4SH_QR", "CAMERA_BIND_FAILED=true")
+                                    }
+                                    } catch (_: Exception) {
+                                        cameraActive = false
+                                        cameraError = true
+                                        Log.e("V4SH_QR", "CAMERA_START_FAILED=true")
                                     }
                                 }, executor)
                                 previewView
@@ -1509,7 +1616,7 @@ fun QrScannerScreen(navController: NavHostController) {
                             .padding(16.dp)
                     ) {
                         Text(
-                            text = if (hasCameraPermission) "Camera Active" else "Permission Required",
+                            text = when { !hasCameraPermission -> "Permission Required"; cameraError -> "Camera unavailable"; cameraActive -> "Camera Active"; else -> "Starting camera" },
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = SecondaryUmber),
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
@@ -1520,41 +1627,14 @@ fun QrScannerScreen(navController: NavHostController) {
 
                 Text("Align the QR code inside the frame", style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Medium))
                 Text("Keep the QR code steady", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 2.dp))
+                if (cameraError) {
+                    Text("Camera could not start. Close other camera apps and reopen the scanner, or enter the UPI ID manually.", color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { navController.navigate("upi_payment") }) { Text("Enter UPI ID instead") }
+                    GalleryScanButton(navController)
+                }
 
                 // Developer Test Error Controls (Isolated under debug trigger)
-                if (isDebugControlsVisible) {
-                    Spacer(modifier = Modifier.height(20.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Button(
-                            onClick = {
-                                if (!scannedOnce) {
-                                    scannedOnce = true
-                                    SharedPaymentState.payeeVpa = "aarav@upi"
-                                    SharedPaymentState.payeeName = "Aarav Sharma"
-                                    SharedPaymentState.paymentAmount = "500"
-                                    navController.navigate("qr_recipient")
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy)
-                        ) {
-                            Text("Simulate Success")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("Simulate QR Error States:", style = MaterialTheme.typography.labelMedium.copy(color = SecondaryUmber, fontWeight = FontWeight.Bold), modifier = Modifier.padding(bottom = 8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { navController.navigate("camera_access_required") }, modifier = Modifier.weight(1f)) { Text("Camera Error", fontSize = 11.sp) }
-                        OutlinedButton(onClick = { navController.navigate("qr_code_not_recognized") }, modifier = Modifier.weight(1f)) { Text("Unrecognized", fontSize = 11.sp) }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { navController.navigate("unsupported_qr_code") }, modifier = Modifier.weight(1f)) { Text("Unsupported", fontSize = 11.sp) }
-                        OutlinedButton(onClick = { navController.navigate("payment_details_missing") }, modifier = Modifier.weight(1f)) { Text("Missing Data", fontSize = 11.sp) }
-                    }
-                }
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -1563,16 +1643,11 @@ fun QrScannerScreen(navController: NavHostController) {
 }
 
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun processImageProxy(imageProxy: androidx.camera.core.ImageProxy, onBarcodeDetected: (String) -> Unit) {
+private fun processImageProxy(imageProxy: androidx.camera.core.ImageProxy, scanner: BarcodeScanner, onBarcodeDetected: (String) -> Unit) {
     val mediaImage = imageProxy.image
     if (mediaImage != null) {
         val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-        val scanner = BarcodeScanning.getClient(
-            BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                .build()
-        )
-        scanner.process(image)
+        try { scanner.process(image)
             .addOnSuccessListener { barcodes ->
                 for (barcode in barcodes) {
                     barcode.rawValue?.let { value ->
@@ -1582,11 +1657,15 @@ private fun processImageProxy(imageProxy: androidx.camera.core.ImageProxy, onBar
                 }
             }
             .addOnFailureListener {
-                Log.e("V4SH_QR", "Barcode scan failed", it)
+                Log.e("V4SH_QR", "BARCODE_SCAN_FAILED=true")
             }
             .addOnCompleteListener {
                 imageProxy.close()
             }
+        } catch (_: Exception) {
+            imageProxy.close()
+            Log.e("V4SH_QR", "BARCODE_START_FAILED=true")
+        }
     } else {
         imageProxy.close()
     }
@@ -1594,6 +1673,8 @@ private fun processImageProxy(imageProxy: androidx.camera.core.ImageProxy, onBar
 
 @Composable
 fun CameraAccessRequiredScreen(navController: NavHostController) {
+    val context = LocalContext.current
+    var settingsError by remember { mutableStateOf(false) }
     V4SHTheme {
         Scaffold(
             topBar = { V4shTopBar(title = "Camera Error", onBack = { navController.popBackStack() }) }
@@ -1622,11 +1703,17 @@ fun CameraAccessRequiredScreen(navController: NavHostController) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Button(onClick = { navController.popBackStack() }, shape = largeCardShape, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy), modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    Text("Allow camera access")
+                Button(onClick = {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                        settingsError = false
+                    } catch (_: Exception) { settingsError = true }
+                }, shape = largeCardShape, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    Text("Open app permission settings")
                 }
+                if (settingsError) Text("Open V4SH permissions manually in Android Settings.", color = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(onClick = { navController.navigate("upi_details") }, shape = largeCardShape, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                OutlinedButton(onClick = { navController.navigate("upi_payment") }, shape = largeCardShape, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                     Text("Enter UPI ID instead", color = PrimaryBurgundy)
                 }
             }
@@ -1646,7 +1733,7 @@ fun QrCodeNotRecognizedScreen(navController: NavHostController) {
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Text("QR code not recognized", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy), textAlign = TextAlign.Center)
-                Text("We couldn’t recognize this QR code. Make sure the entire code is visible and try scanning again.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
+                Text("The QR was detected, but its payment details could not be accepted. ${com.festpay.app.data.UiPresentation.qrIssueLabel(lastQrIssue)} Try a standard UPI payment QR.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
 
                 Card(shape = largeCardShape, colors = CardDefaults.cardColors(containerColor = Color(0xFFFFDBCA).copy(alpha = 0.3f)), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -1681,12 +1768,12 @@ fun UnsupportedQrCodeScreen(navController: NavHostController) {
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Text("Unsupported QR code", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy), textAlign = TextAlign.Center)
-                Text("This QR code isn’t a supported UPI payment QR.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
+                Text(com.festpay.app.data.UiPresentation.qrIssueLabel(lastQrIssue).ifBlank { "This QR code isn’t a supported UPI payment QR." }, style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
 
                 Card(shape = largeCardShape, colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Supported QR formats", style = MaterialTheme.typography.headlineSmall.copy(color = PrimaryBurgundy))
-                        Text("V4SH supports standard Bharat QR and UPI payment codes issued by banks, verified merchants, and individuals.", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant), modifier = Modifier.padding(top = 4.dp))
+                        Text("V4SH reads standard upi://pay payment requests. Other QR formats are unsupported; a scanned name does not verify account ownership.", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceVariant), modifier = Modifier.padding(top = 4.dp))
                     }
                 }
 
@@ -1739,15 +1826,35 @@ fun PaymentDetailsMissingScreen(navController: NavHostController) {
     }
 }
 
+/** Shown if Android reclaimed the app in the background and the in-memory draft is gone. No payment exists. */
+@Composable
+private fun StaleDraftNotice(navController: NavHostController) {
+    V4SHTheme {
+        Scaffold(topBar = { V4shTopBar(title = "Payment", onBack = { navController.popBackStack() }) }) { innerPadding ->
+            Column(
+                Modifier.fillMaxSize().background(SurfaceCream).padding(innerPadding).padding(spacing),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Start again", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
+                Text("The recipient details are no longer available, for example because the app was closed in the background. No payment was started.",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                Button(onClick = { navController.navigate("home") { popUpTo("home") { inclusive = false } } }, shape = largeCardShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy), modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Back to Home") }
+            }
+        }
+    }
+}
+
 @Composable
 fun QrRecipientScreen(navController: NavHostController) {
+    if (SharedPaymentState.payeeVpa.isBlank()) { StaleDraftNotice(navController); return }
     val payeeName = SharedPaymentState.payeeName
     val payeeVpa = SharedPaymentState.payeeVpa
 
     V4SHTheme {
         Scaffold(
             topBar = {
-                V4shTopBar(title = "Recipient", onBack = { navController.popBackStack() }, onAction = { /* Help */ })
+                V4shTopBar(title = "Recipient", onBack = { navController.popBackStack() }, onAction = { navController.navigate("help_center") })
             }
         ) { innerPadding ->
             Column(
@@ -1762,6 +1869,7 @@ fun QrRecipientScreen(navController: NavHostController) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(text = "Recipient", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
                 Text(text = "Review the payment destination before continuing.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                RecipientVerificationNotice(SharedPaymentState.recipient)
 
                 Card(
                     shape = largeCardShape,
@@ -1780,7 +1888,7 @@ fun QrRecipientScreen(navController: NavHostController) {
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = payeeName.take(2).uppercase(),
+                                    text = com.festpay.app.data.UiPresentation.initial(SharedPaymentState.recipient.verifiedBeneficiaryName ?: SharedPaymentState.recipient.qrSuppliedName),
                                     style = MaterialTheme.typography.headlineMedium.copy(color = PrimaryBurgundy, fontWeight = FontWeight.Bold)
                                 )
                             }
@@ -1816,7 +1924,7 @@ fun QrRecipientScreen(navController: NavHostController) {
                         Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(20.dp))
                         Column {
                             Text("Scanned from UPI QR", style = MaterialTheme.typography.labelLarge.copy(color = OnSurfaceDark, fontWeight = FontWeight.Bold))
-                            Text("Recipient details were read from the scanned QR code.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
+                            Text("The UPI ID and payment fields came from the QR. Its supplied name is not used as bank identity.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
                         }
                     }
                 }
@@ -1850,17 +1958,22 @@ fun QrRecipientScreen(navController: NavHostController) {
 }
 
 @Composable
-fun AmountEntryScreen(navController: NavHostController) {
-    var amount by remember { mutableStateOf(SharedPaymentState.paymentAmount) }
-    var note by remember { mutableStateOf(SharedPaymentState.paymentNote) }
+fun AmountEntryScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
+    if (SharedPaymentState.payeeVpa.isBlank()) { StaleDraftNotice(navController); return }
+    val payContext = LocalContext.current
+    var opening by remember { mutableStateOf(false) }
+    val phonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(paymentViewModel, payContext) { paymentViewModel.inspectPaymentReadiness(payContext) }
+    val selectionId = SharedPaymentState.selectionId
+    var amount by remember(selectionId) { mutableStateOf(SharedPaymentState.paymentAmount) }
+    var note by remember(selectionId) { mutableStateOf(SharedPaymentState.paymentNote) }
 
-    val amountValue = amount.toDoubleOrNull() ?: 0.0
-    val isValidAmount = amountValue > 0.0
+    val isValidAmount = com.festpay.app.data.PaymentInputValidator.amount(amount) != null
 
     V4SHTheme {
         Scaffold(
             topBar = {
-                V4shTopBar(title = "Amount", onBack = { navController.popBackStack() }, onAction = { /* Help */ })
+                V4shTopBar(title = "Amount", onBack = { navController.popBackStack() }, onAction = { navController.navigate("help_center") })
             }
         ) { innerPadding ->
             Column(
@@ -1889,16 +2002,18 @@ fun AmountEntryScreen(navController: NavHostController) {
                             modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFFFD4BE)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(SharedPaymentState.payeeName.take(2).uppercase(), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
+                            Text(com.festpay.app.data.UiPresentation.initial(SharedPaymentState.recipient.verifiedBeneficiaryName ?: SharedPaymentState.recipient.qrSuppliedName), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
                         }
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(SharedPaymentState.payeeName, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp, color = OnSurfaceDark))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(SharedPaymentState.payeeName, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp, color = OnSurfaceDark),
+                                    maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                 Surface(shape = pillShape, color = SurfaceContainerHigh) {
-                                    Text("Standard UPI", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                    Text("Standard UPI", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                                 }
                             }
                             Text(SharedPaymentState.payeeVpa, style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
+                            SharedPaymentState.recipient.nameSourceLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber)) }
                         }
                     }
                 }
@@ -1918,6 +2033,8 @@ fun AmountEntryScreen(navController: NavHostController) {
                     },
                     label = { Text("Amount (₹)") },
                     placeholder = { Text("0.00") },
+                    isError = com.festpay.app.data.UiPresentation.amountProblem(amount) != null,
+                    supportingText = com.festpay.app.data.UiPresentation.amountProblem(amount)?.let { message -> { Text(message) } },
                     leadingIcon = { Text("₹", style = MaterialTheme.typography.headlineMedium.copy(color = PrimaryBurgundy), modifier = Modifier.padding(start = 12.dp)) },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                     shape = largeCardShape,
@@ -1956,7 +2073,7 @@ fun AmountEntryScreen(navController: NavHostController) {
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
-                    label = { Text("Add a note (optional)") },
+                    label = { Text("Local note (not sent to carrier)") },
                     placeholder = { Text("What's this payment for?") },
                     shape = cardShape,
                     modifier = Modifier.fillMaxWidth(),
@@ -1970,21 +2087,55 @@ fun AmountEntryScreen(navController: NavHostController) {
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Why Pay cannot start (earlier unresolved attempt, Accessibility off, permission...), in plain words.
+                    paymentViewModel.operationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    ErrorHelpBlock(paymentViewModel.operationError) { fix ->
+                        when (fix) {
+                            com.festpay.app.data.IssueFix.ACCESSIBILITY_SETTINGS -> com.festpay.app.data.IssueLog.openAccessibilitySettings(payContext)
+                            com.festpay.app.data.IssueFix.PHONE_PERMISSION -> phonePermission.launch(Manifest.permission.CALL_PHONE)
+                            else -> {}
+                        }
+                    }
+                    if (paymentViewModel.startFailure == com.festpay.app.ui.viewmodel.StartFailure.OPERATION_ACTIVE) {
+                        OutlinedButton(onClick = {
+                            com.festpay.app.data.AccessibilityRuntime.revokeSession()
+                            paymentViewModel.clearStartRefusal()
+                        }, shape = largeCardShape) { Text("Stop the stuck operation") }
+                    }
+                    SimPickerRow()
                     Button(
                         onClick = {
-                            if (isValidAmount) {
-                                SharedPaymentState.paymentAmount = amount
-                                SharedPaymentState.paymentNote = note
-                                navController.navigate("review_payment")
+                            if (!isValidAmount || opening) return@Button
+                            SharedPaymentState.paymentAmount = amount
+                            SharedPaymentState.paymentNote = note
+                            if (ContextCompat.checkSelfPermission(payContext, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+                                phonePermission.launch(Manifest.permission.CALL_PHONE)
+                                return@Button
+                            }
+                            val reviewed = SharedPaymentState.review() ?: return@Button
+                            opening = true
+                            // The request is frozen here and reused unchanged: the journal, the carrier session and the typed values.
+                            paymentViewModel.startPayment(
+                                vpa = reviewed.recipient.upiId,
+                                name = reviewed.recipient.verifiedBeneficiaryName ?: reviewed.recipient.qrSuppliedName.orEmpty(),
+                                amount = reviewed.amount,
+                                ctx = payContext,
+                                reviewCurrent = { SharedPaymentState.isCurrent(reviewed) }
+                            ) { _ ->
+                                opening = false
+                                if (paymentViewModel.startFailure == com.festpay.app.ui.viewmodel.StartFailure.NONE) {
+                                    SharedPaymentState.clear()
+                                    navController.navigate("payment_progress") { popUpTo("home") { inclusive = false } }
+                                }
                             }
                         },
-                        enabled = isValidAmount,
+                        enabled = isValidAmount && !opening && !paymentViewModel.paymentPreparationBlocked,
                         shape = largeCardShape,
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy, disabledContainerColor = PrimaryBurgundy.copy(alpha = 0.4f)),
                         modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Continue to Review", style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White))
+                            Text(if (opening) "Opening carrier…" else if (isValidAmount) "Pay ₹$amount" else "Pay", style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White))
                             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         }
                     }
@@ -2000,15 +2151,30 @@ fun AmountEntryScreen(navController: NavHostController) {
 
 @Composable
 fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
-    val amount = SharedPaymentState.paymentAmount
-    val note = SharedPaymentState.paymentNote
+    val reviewed = remember { SharedPaymentState.review() }
+    if (reviewed == null) {
+        Column(Modifier.padding(20.dp)) {
+            Text("Payment review unavailable")
+            Text("Return to recipient and amount entry. No payment was started.")
+            TextButton(onClick = { navController.popBackStack() }) { Text("Back") }
+        }
+        return
+    }
+    val amount = reviewed.amount
+    val note = reviewed.note
+    val reviewCurrent = SharedPaymentState.isCurrent(reviewed)
     var isPayButtonEnabled by remember { mutableStateOf(true) }
     val context = LocalContext.current
+    val phonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(paymentViewModel, context) {
+        com.festpay.app.data.PaymentDiagnostics.stage("review.screen", "SHOWN", "reviewCurrent=$reviewCurrent")
+        paymentViewModel.inspectPaymentReadiness(context)
+    }
 
     V4SHTheme {
         Scaffold(
             topBar = {
-                V4shTopBar(title = "Review Payment", onBack = { navController.popBackStack() }, onAction = { /* Help */ })
+                V4shTopBar(title = "Review Payment", onBack = { navController.popBackStack() }, onAction = { navController.navigate("help_center") })
             }
         ) { innerPadding ->
             Column(
@@ -2023,74 +2189,18 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(text = "Review payment", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
                 Text(text = "Check the details before you pay.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                if (!reviewCurrent) Text("Payment details changed. Return to recipient and amount entry for a fresh Review. No payment was started.", color = MaterialTheme.colorScheme.error)
+                paymentViewModel.operationError?.let { message ->
+                    Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 16.dp))
+                }
+                if (paymentViewModel.paymentPreparationBlocked) {
+                    TextButton(onClick = { navController.navigate("transactions") }) {
+                        Text("View existing attempts")
+                    }
+                }
 
                 // Developer Execution Mode Selector (Isolated under debug trigger)
-                if (isDebugControlsVisible) {
-                    Card(
-                        shape = cardShape,
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0E4DA)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("⚙️ Execution Mode (Debug)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                val isReal = paymentViewModel.isRealUssdMode
-                                OutlinedButton(
-                                    onClick = { paymentViewModel.isRealUssdMode = false },
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (!isReal) PrimaryBurgundy else Color.Transparent,
-                                        contentColor = if (!isReal) Color.White else PrimaryBurgundy
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Mock Engine", fontSize = 10.sp)
-                                }
-                                OutlinedButton(
-                                    onClick = { paymentViewModel.isRealUssdMode = true },
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (isReal) PrimaryBurgundy else Color.Transparent,
-                                        contentColor = if (isReal) Color.White else PrimaryBurgundy
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Real USSD (*99#)", fontSize = 10.sp)
-                                }
-                            }
-                        }
-                    }
 
-                    if (!paymentViewModel.isRealUssdMode) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Card(
-                            shape = cardShape,
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0E4DA)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("🛠️ Dev Test Scenario (Mock Engine)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    PaymentScenario.entries.forEach { scenario ->
-                                        val selected = paymentViewModel.currentScenario == scenario
-                                        OutlinedButton(
-                                            onClick = { paymentViewModel.currentScenario = scenario },
-                                            colors = ButtonDefaults.outlinedButtonColors(
-                                                containerColor = if (selected) PrimaryBurgundy else Color.Transparent,
-                                                contentColor = if (selected) Color.White else PrimaryBurgundy
-                                            ),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(scenario.name, fontSize = 10.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
 
                 Card(
                     shape = largeCardShape,
@@ -2104,12 +2214,12 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
                                 modifier = Modifier.size(48.dp).clip(CircleShape).background(SurfaceContainerHigh),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(SharedPaymentState.payeeName.take(2).uppercase(), style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
+                                Text(com.festpay.app.data.UiPresentation.initial(reviewed.recipient.verifiedBeneficiaryName ?: reviewed.recipient.qrSuppliedName), style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
                             }
                             Column {
-                                Text(SharedPaymentState.payeeName, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = OnSurfaceDark))
+                                Text(reviewed.recipient.displayName, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = OnSurfaceDark))
                                 Text("Standard UPI Payee", style = MaterialTheme.typography.labelSmall.copy(color = SecondaryUmber))
-                                Text(SharedPaymentState.payeeVpa, style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber, fontWeight = FontWeight.Medium))
+                                Text(reviewed.recipient.upiId, style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber, fontWeight = FontWeight.Medium))
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
@@ -2119,8 +2229,8 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Verified, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(16.dp))
-                                Text("Recipient verified from scanned UPI QR", style = MaterialTheme.typography.bodySmall.copy(color = OnSurfaceDark))
+                                Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(16.dp))
+                                RecipientVerificationNotice(reviewed.recipient)
                             }
                         }
                     }
@@ -2141,6 +2251,7 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
                         Text("AMOUNT", style = MaterialTheme.typography.labelSmall.copy(color = SecondaryUmber, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp))
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("₹$amount", style = MaterialTheme.typography.displayLarge.copy(fontSize = 36.sp, fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
+                        Text("Currency: INR", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
 
                         Spacer(modifier = Modifier.height(16.dp))
                         HorizontalDivider(color = OutlineBorder)
@@ -2148,7 +2259,7 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
 
                         if (note.isNotBlank()) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Note", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                                Text("Local note (not sent)", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
                                 Text(note, style = MaterialTheme.typography.bodyMedium.copy(color = OnSurfaceDark, fontWeight = FontWeight.Medium))
                             }
                             Spacer(modifier = Modifier.height(12.dp))
@@ -2166,7 +2277,7 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = PrimaryBurgundy, modifier = Modifier.size(14.dp))
-                                    Text(if (paymentViewModel.isRealUssdMode) "USSD *99#" else "UPI", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
+                                    Text("USSD *99#", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
                                 }
                             }
                         }
@@ -2207,27 +2318,34 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
                 ) {
                     Button(
                         onClick = {
-                            if (isPayButtonEnabled) {
+                            com.festpay.app.data.PaymentDiagnostics.stage("review.payButton", "CLICK", "enabledFlag=$isPayButtonEnabled")
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+                                phonePermission.launch(Manifest.permission.CALL_PHONE)
+                            } else if (isPayButtonEnabled && SharedPaymentState.isCurrent(reviewed)) {
                                 isPayButtonEnabled = false
-                                navController.navigate("payment_in_progress")
                                 paymentViewModel.startPayment(
-                                    vpa = SharedPaymentState.payeeVpa,
-                                    name = SharedPaymentState.payeeName,
-                                    amount = SharedPaymentState.paymentAmount,
-                                    ctx = context
+                                    vpa = reviewed.recipient.upiId,
+                                    name = reviewed.recipient.verifiedBeneficiaryName ?: reviewed.recipient.qrSuppliedName.orEmpty(),
+                                    amount = reviewed.amount,
+                                    ctx = context,
+                                    reviewCurrent = { SharedPaymentState.isCurrent(reviewed) }
                                 ) { state ->
                                     isPayButtonEnabled = true
                                     when (state) {
                                         PaymentState.SUCCESS -> navController.navigate("payment_successful") { popUpTo("home") }
                                         PaymentState.FAILED -> navController.navigate("payment_failed")
-                                        PaymentState.UNKNOWN -> navController.navigate("payment_status_unclear")
+                                        PaymentState.UNKNOWN -> navController.navigate(
+                                            if (FestPayAccessibilityService.UssdSessionData.operationActive &&
+                                                !FestPayAccessibilityService.UssdSessionData.isBalanceCheck &&
+                                                FestPayAccessibilityService.UssdSessionData.attemptId == paymentViewModel.selectedAttemptId)
+                                                "payment_journey" else "payment_status_unclear")
                                         PaymentState.AUTHENTICATION_REQUIRED -> navController.navigate("authentication_required")
                                         else -> {}
                                     }
                                 }
                             }
                         },
-                        enabled = isPayButtonEnabled,
+                        enabled = isPayButtonEnabled && reviewCurrent && !paymentViewModel.paymentPreparationBlocked,
                         shape = largeCardShape,
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
                         modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -2237,20 +2355,20 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(text = "Pay ₹$amount", style = MaterialTheme.typography.labelLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White))
+                            Text(text = if (isPayButtonEnabled) "Pay ₹$amount" else "Preparing carrier launch…", style = MaterialTheme.typography.labelLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White))
                             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
 
                     TextButton(
                         onClick = {
-                            paymentViewModel.markCancelled()
-                            navController.navigate("payment_cancelled")
+                            if (paymentViewModel.markCancelled()) navController.navigate("payment_cancelled")
+                            else navController.navigate("home") { popUpTo("home"); launchSingleTop = true }
                         },
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Text(
-                            text = "Cancel",
+                            text = "Close review",
                             style = MaterialTheme.typography.labelMedium.copy(color = SecondaryUmber)
                         )
                     }
@@ -2264,25 +2382,18 @@ fun ReviewPaymentScreen(navController: NavHostController, paymentViewModel: Paym
 
 @Composable
 fun PaymentInProgressScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
-    var presentationState by remember { mutableStateOf("CONNECTING") }
-
-    LaunchedEffect(Unit) {
-        while (paymentViewModel.paymentState == PaymentState.PROCESSING || paymentViewModel.paymentState == PaymentState.AUTHENTICATION_REQUIRED) {
-            presentationState = FestPayAccessibilityService.UssdSessionData.currentPresentationState
-            if (presentationState == "SUCCESS") {
-                navController.navigate("payment_successful") { popUpTo("home") }
-                break
-            } else if (presentationState == "FAILED") {
-                navController.navigate("payment_failed")
-                break
-            } else if (presentationState == "UNKNOWN") {
-                navController.navigate("payment_status_unclear")
-                break
-            } else if (presentationState == "AUTHENTICATION_REQUIRED") {
-                navController.navigate("authentication_required")
-                break
+    val presentationState = FestPayAccessibilityService.UssdSessionData.currentPresentationState
+    LaunchedEffect(paymentViewModel.paymentState, presentationState) {
+        when (paymentViewModel.paymentState) {
+            PaymentState.UNKNOWN, PaymentState.SUCCESS, PaymentState.FAILED -> {
+                // No authorized confirmation adapter exists. Neither screen labels
+                // nor carrier observations can authorize a financial terminal page.
+                navController.navigate("payment_status_unclear") { popUpTo("payment_in_progress") { inclusive = true } }
             }
-            delay(300)
+            PaymentState.PROCESSING -> if (presentationState == "AUTHENTICATION_REQUIRED") {
+                navController.navigate("authentication_required")
+            }
+            else -> Unit
         }
     }
 
@@ -2300,7 +2411,7 @@ fun PaymentInProgressScreen(navController: NavHostController, paymentViewModel: 
     V4SHTheme {
         Scaffold(
             topBar = {
-                V4shTopBar(title = "Payment in Progress", onAction = { /* Help */ })
+                V4shTopBar(title = "Payment in Progress", onAction = { navController.navigate("help_center") })
             }
         ) { innerPadding ->
             Column(
@@ -2373,6 +2484,10 @@ fun PaymentInProgressScreen(navController: NavHostController, paymentViewModel: 
 
 @Composable
 fun PaymentSuccessfulScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
+    if (!com.festpay.app.data.PaymentIntegrityPolicy.confirmationAvailable || paymentViewModel.paymentState != PaymentState.SUCCESS) {
+        PaymentStatusUnclearScreen(navController, paymentViewModel)
+        return
+    }
     val result = paymentViewModel.lastResult
     V4SHTheme {
         Scaffold(
@@ -2413,7 +2528,7 @@ fun PaymentSuccessfulScreen(navController: NavHostController, paymentViewModel: 
                         }
                         if (result != null) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Ref: ${result.localReference}", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
+                            Text("V4SH Attempt ID: ${result.localReference}", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
                         }
                     }
                 }
@@ -2448,7 +2563,11 @@ fun PaymentSuccessfulScreen(navController: NavHostController, paymentViewModel: 
 }
 
 @Composable
-fun PaymentFailedScreen(navController: NavHostController) {
+fun PaymentFailedScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
+    if (!com.festpay.app.data.PaymentIntegrityPolicy.confirmationAvailable || paymentViewModel.paymentState != PaymentState.FAILED) {
+        PaymentStatusUnclearScreen(navController, paymentViewModel)
+        return
+    }
     V4SHTheme {
         Scaffold(
             topBar = { V4shTopBar(title = "Payment Failed") }
@@ -2537,7 +2656,9 @@ fun PaymentStatusUnclearScreen(navController: NavHostController, paymentViewMode
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Payment status unclear", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("We couldn't confirm whether this payment was completed.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                Text("V4SH could not receive a final confirmation from the payment service.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                Text("Check your bank/UPI confirmation before trying again.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                Text(paymentViewModel.operationError ?: paymentViewModel.lastResult?.message ?: "Authorized reconciliation is unavailable; this attempt remains reserved.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
 
                 Card(shape = largeCardShape, colors = CardDefaults.cardColors(containerColor = Color(0xFFFBF3E8)), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -2560,12 +2681,12 @@ fun PaymentStatusUnclearScreen(navController: NavHostController, paymentViewMode
                     },
                     shape = largeCardShape,
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBurgundy),
-                    modifier = Modifier.fillMaxWidth().height(56.dp)
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
                 ) {
                     if (checkingStatus) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Check Payment Status", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = Color.White))
+                        Text("Check Payment Status", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, color = Color.White), textAlign = TextAlign.Center)
                     }
                 }
 
@@ -2578,6 +2699,7 @@ fun PaymentStatusUnclearScreen(navController: NavHostController, paymentViewMode
                 ) {
                     Text("View Transactions", color = PrimaryBurgundy)
                 }
+                TextButton(onClick = { navController.navigate("home") { popUpTo("home"); launchSingleTop = true } }) { Text("Done") }
             }
         }
     }
@@ -2599,8 +2721,8 @@ fun PaymentCancelledScreen(navController: NavHostController) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
-                Text("Payment cancelled", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
-                Text("The payment flow was stopped before the payment was initiated.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                Text("Review closed", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
+                Text("Closing review does not cancel a payment already initiated. Existing attempts keep their recorded status in Transactions.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
 
                 Button(
                     onClick = { navController.popBackStack() },
@@ -2682,7 +2804,8 @@ fun AuthenticationRequiredScreen(navController: NavHostController) {
 
 @Composable
 fun TransactionDetailsScreen(navController: NavHostController, paymentViewModel: PaymentViewModel = viewModel()) {
-    val lastRecord = paymentViewModel.transactionLedger.lastOrNull()
+    RefreshHistoryOnResume(paymentViewModel)
+    val lastRecord = paymentViewModel.transactionLedger.firstOrNull { it.localTransactionId == paymentViewModel.selectedAttemptId }
     V4SHTheme {
         Scaffold(
             topBar = { V4shTopBar(title = "Transaction Details", onBack = { navController.popBackStack() }) }
@@ -2699,30 +2822,73 @@ fun TransactionDetailsScreen(navController: NavHostController, paymentViewModel:
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Transaction Details", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy))
                 Spacer(modifier = Modifier.height(24.dp))
-
-                Card(shape = largeCardShape, colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest), modifier = Modifier.fillMaxWidth()) {
+                paymentViewModel.historyError?.let { message -> Text(message, color = MaterialTheme.colorScheme.error) }
+                if (lastRecord == null) {
+                    Text("The selected saved attempt is unavailable. Open Transactions to select an existing record.")
+                    TextButton(onClick = { navController.navigate("transactions") }) { Text("View Transactions") }
+                } else Card(shape = largeCardShape, colors = CardDefaults.cardColors(containerColor = SurfaceCardLowest), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Payee", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
-                            Text(lastRecord?.payeeName ?: SharedPaymentState.payeeName, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = OnSurfaceDark))
+                            Text("Name (unverified)", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                            Text(lastRecord.payeeName.ifBlank { "Not recorded" }, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = OnSurfaceDark))
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("UPI ID", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
-                            Text(lastRecord?.payeeVpa ?: SharedPaymentState.payeeVpa, style = MaterialTheme.typography.bodyMedium.copy(color = OnSurfaceDark))
+                            Text(lastRecord.payeeVpa, style = MaterialTheme.typography.bodyMedium.copy(color = OnSurfaceDark))
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Amount", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
-                            Text("₹${lastRecord?.amount ?: SharedPaymentState.paymentAmount}", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
+                            Text("₹${lastRecord.amount}", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Status", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
-                            Text(lastRecord?.state?.name ?: "UNKNOWN", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
+                            Text(com.festpay.app.data.UiPresentation.carrierOutcomeLabel(lastRecord.carrierOutcome) ?: com.festpay.app.data.UiPresentation.ownerResolutionLabel(lastRecord.ownerResolution) ?: com.festpay.app.data.UiPresentation.outcomeLabel(lastRecord.state), style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = PrimaryBurgundy))
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Reference ID", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
-                            Text(lastRecord?.localTransactionId ?: "V4SH-MOCK", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                            Text("Created", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                            Text(com.festpay.app.data.UiPresentation.shortTimestamp(lastRecord.timestamp), style = MaterialTheme.typography.bodyMedium.copy(color = OnSurfaceDark))
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("V4SH Attempt ID", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                            Text(lastRecord.localTransactionId, style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber))
+                        }
+                        Text("Type: ${lastRecord.operation.lowercase().replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.bodySmall)
+                        Text("Confirmation: ${com.festpay.app.data.UiPresentation.evidenceLabel(lastRecord.evidenceStatus)}", style = MaterialTheme.typography.bodySmall)
+                        Text(if (lastRecord.bankReference != null) "Transaction reference: ${lastRecord.bankReference} (printed by the carrier)" else "Transaction reference: Not available", style = MaterialTheme.typography.bodySmall)
+                        if (lastRecord.carrierOutcome != null) {
+                            Text("Taken from the carrier's own final message. V4SH does not query your bank.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
+                        }
+                        com.festpay.app.data.UiPresentation.carrierResultBadge(lastRecord.carrierResult)?.let {
+                            Text("Carrier's last message: ${it.removePrefix("Carrier said: ")}. This is not a bank confirmation.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
+                        }
+                        if (lastRecord.ownerResolution != null) {
+                            Text("This is your own statement after checking your bank. V4SH did not verify it.", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber))
                         }
                     }
+                }
+                if (lastRecord != null) { Spacer(modifier = Modifier.height(16.dp)); ReceiptButton(lastRecord) }
+                if (lastRecord != null && lastRecord.state == PaymentState.UNKNOWN && lastRecord.ownerResolution == null && lastRecord.carrierOutcome == null) {
+                    var confirming by remember(lastRecord.localTransactionId) { mutableStateOf(false) }
+                    val detailsContext = LocalContext.current
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(onClick = { confirming = true }, shape = largeCardShape, modifier = Modifier.fillMaxWidth()) { Text("Resolve this attempt") }
+                    paymentViewModel.operationError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
+                    if (confirming) AlertDialog(
+                        onDismissRequest = { confirming = false },
+                        title = { Text("Check your bank first") },
+                        text = { Text("Open your bank app or SMS and look for the ₹${lastRecord.amount} payment to ${lastRecord.payeeVpa}. V4SH cannot confirm it. Your answer is saved as your own statement, keeps this record as it is, and lets new payments start. It cannot be undone. If you are not sure, do not pay again.") },
+                        confirmButton = {
+                            Column(horizontalAlignment = Alignment.End) {
+                                TextButton(onClick = {
+                                    paymentViewModel.resolveAttemptByOwner(detailsContext, lastRecord.localTransactionId, com.festpay.app.data.OwnerResolution.DEBITED); confirming = false
+                                }) { Text("Money was debited") }
+                                TextButton(onClick = {
+                                    paymentViewModel.resolveAttemptByOwner(detailsContext, lastRecord.localTransactionId, com.festpay.app.data.OwnerResolution.NOT_DEBITED); confirming = false
+                                }) { Text("Money was not debited") }
+                            }
+                        },
+                        dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } }
+                    )
                 }
             }
         }
@@ -2743,22 +2909,30 @@ fun CheckBalanceScreen(navController: NavHostController, paymentViewModel: Payme
         if (granted) {
             permissionDeniedMessage = false
             checking = true
-            paymentViewModel.startBalanceCheck(context) { }
+            paymentViewModel.startBalanceCheck(context) { state -> if (state == PaymentState.IDLE) checking = false }
         } else {
             permissionDeniedMessage = true
         }
     }
 
-    LaunchedEffect(checking) {
+    LaunchedEffect(Unit) {
+        // Opened from Home's balance card: start straight away, but only when the phone permission is already granted.
+        if (com.festpay.app.data.BalanceQuick.consume() && !checking &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            checking = true
+            paymentViewModel.startBalanceCheck(context) { state -> if (state == PaymentState.IDLE) checking = false }
+        }
+    }
+
+    LaunchedEffect(checking, FestPayAccessibilityService.UssdSessionData.currentPresentationState,
+        FestPayAccessibilityService.UssdSessionData.parsedBalance) {
         if (checking) {
-            while (checking) {
-                presentationState = FestPayAccessibilityService.UssdSessionData.currentPresentationState
-                parsedBalance = FestPayAccessibilityService.UssdSessionData.parsedBalance
-                if (presentationState == "BALANCE_SUCCESS" || presentationState == "BALANCE_UNKNOWN" || presentationState == "FAILED") {
-                    checking = false
-                    break
-                }
-                delay(300)
+            presentationState = FestPayAccessibilityService.UssdSessionData.currentPresentationState
+            parsedBalance = FestPayAccessibilityService.UssdSessionData.parsedBalance
+            if (presentationState in listOf("BALANCE_SUCCESS", "BALANCE_UNKNOWN", "FAILED")) {
+                if (presentationState != "BALANCE_SUCCESS") com.festpay.app.data.IssueLog.record("Balance unavailable",
+                    FestPayAccessibilityService.UssdSessionData.errorMessage ?: "V4SH could not identify the balance.")
+                checking = false
             }
         }
     }
@@ -2786,6 +2960,7 @@ fun CheckBalanceScreen(navController: NavHostController, paymentViewModel: Payme
                     Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
                 }
                 Spacer(modifier = Modifier.height(16.dp))
+                if (presentationState != "BALANCE_SUCCESS") { SimPickerRow(); Spacer(modifier = Modifier.height(16.dp)) }
 
                 if (presentationState == "BALANCE_SUCCESS" && parsedBalance != null) {
                     Text("Available Balance", style = MaterialTheme.typography.labelLarge.copy(color = SecondaryUmber, fontWeight = FontWeight.Bold, letterSpacing = 1.sp))
@@ -2804,7 +2979,19 @@ fun CheckBalanceScreen(navController: NavHostController, paymentViewModel: Payme
                     }
                 } else if (presentationState == "BALANCE_UNKNOWN" || presentationState == "FAILED") {
                     Text("Balance unavailable", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy), textAlign = TextAlign.Center)
-                    Text("V4SH received a response from the payment service, but could not safely identify the account balance. Please check the carrier response before trying again.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                    Text(FestPayAccessibilityService.UssdSessionData.errorMessage ?: "V4SH could not safely identify the account balance. Check the carrier response and cellular signal before trying again. Mobile data and Wi-Fi are not required.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+
+                    ErrorHelpBlock(FestPayAccessibilityService.UssdSessionData.errorMessage) { fix ->
+                        when (fix) {
+                            com.festpay.app.data.IssueFix.ACCESSIBILITY_SETTINGS -> com.festpay.app.data.IssueLog.openAccessibilitySettings(context)
+                            com.festpay.app.data.IssueFix.PHONE_PERMISSION -> permissionLauncher.launch(Manifest.permission.CALL_PHONE)
+                            com.festpay.app.data.IssueFix.STOP_STUCK_OPERATION -> com.festpay.app.data.AccessibilityRuntime.revokeSession()
+                            else -> {}
+                        }
+                    }
+                    OutlinedButton(onClick = {
+                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Open Accessibility Settings") }
 
                     Button(
                         onClick = {
@@ -2813,7 +3000,7 @@ fun CheckBalanceScreen(navController: NavHostController, paymentViewModel: Payme
                             val hasCallPhone = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
                             if (hasCallPhone) {
                                 checking = true
-                                paymentViewModel.startBalanceCheck(context) { }
+                                paymentViewModel.startBalanceCheck(context) { state -> if (state == PaymentState.IDLE) checking = false }
                             } else {
                                 permissionLauncher.launch(Manifest.permission.CALL_PHONE)
                             }
@@ -2836,7 +3023,7 @@ fun CheckBalanceScreen(navController: NavHostController, paymentViewModel: Payme
                     }
                 } else {
                     Text("Check Bank Balance", style = MaterialTheme.typography.headlineLarge.copy(color = PrimaryBurgundy), textAlign = TextAlign.Center)
-                    Text("V4SH will automatically dial *99# and select Check Balance (3). You will enter your UPI PIN on the carrier screen.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
+                    Text("V4SH will dial *99# and select Check Balance (3). Mobile data and Wi-Fi are not required; keep cellular signal available. Enter your UPI PIN only on the carrier screen.", style = MaterialTheme.typography.bodyMedium.copy(color = SecondaryUmber), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp, bottom = 32.dp))
 
                     if (permissionDeniedMessage) {
                         Card(
@@ -2857,7 +3044,7 @@ fun CheckBalanceScreen(navController: NavHostController, paymentViewModel: Payme
                             if (hasCallPhone) {
                                 permissionDeniedMessage = false
                                 checking = true
-                                paymentViewModel.startBalanceCheck(context) { }
+                                paymentViewModel.startBalanceCheck(context) { state -> if (state == PaymentState.IDLE) checking = false }
                             } else {
                                 permissionLauncher.launch(Manifest.permission.CALL_PHONE)
                             }

@@ -1,0 +1,16 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ADB-controlled, synthetic-only crash fixture; excluded from release. -->
+    <instrumentation android:name="com.festpay.app.RecoveryProbeInstrumentation"
+        android:targetPackage="com.festpay.app" android:label="Synthetic recovery probe" />
+    <application>
+        <activity android:name="com.festpay.app.RecoveryStateActivity" android:exported="false" />
+        <!-- Explicit-user-start, metadata-only physical diagnostic. Never packaged in release. -->
+        <activity android:name="com.festpay.app.UssdWindowProbeActivity" android:exported="true"
+            android:label="V4SH read-only USSD window probe" />
+        <activity android:name="com.festpay.app.UssdControlFixtureActivity" android:exported="false" />
+    </application>
+    <instrumentation android:name="com.festpay.app.PaymentReadOnlyAuditInstrumentation"
+        android:targetPackage="com.festpay.app" android:label="Read-only protected attempt audit" />
+    <instrumentation android:name="com.festpay.app.JournalEventInspectorInstrumentation"
+        android:targetPackage="com.festpay.app" android:label="Read-only decrypted event inspector" />
+</manifest>

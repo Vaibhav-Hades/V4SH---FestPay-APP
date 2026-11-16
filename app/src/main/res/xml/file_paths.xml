@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Receipts are written here only while being shared, and replaced each time. -->
+    <cache-path name="receipts" path="receipts/" />
+</paths>

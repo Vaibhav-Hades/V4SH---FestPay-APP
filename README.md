@@ -2,6 +2,16 @@
 
 A modern interface for *99#.
 
+## Download
+
+**[Download the latest V4SH APK](https://github.com/Vaibhav-Hades/V4SH---FestPay-APP/releases/latest)**
+
+1. Open the link on your Android phone and download `app-release.apk` from the newest release.
+2. Allow installs from your browser or file manager when Android asks, then install.
+3. Open V4SH, grant Phone permission, and switch V4SH on in Android Accessibility settings before a payment.
+
+You type your UPI PIN yourself, only on the carrier's own screen. V4SH never reads or enters it.
+
 ## Overview
 
 V4SH provides a modern Android interface for cellular USSD-based UPI payment initiation, simplifying the interaction normally performed through raw `*99#` USSD menus. 

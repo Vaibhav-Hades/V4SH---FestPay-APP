@@ -3,7 +3,10 @@ package com.festpay.app.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -21,11 +24,11 @@ import com.festpay.app.ui.theme.V4SHColors
  * Enum representing the four locked bottom‑tab destinations.
  * The `route` values must match the screen ids defined in screens.json.
  */
-enum class BottomTab(val route: String, val label: String) {
-    HOME("home", "Home"),
-    TRANSACTIONS("transactions", "Transactions"),
-    RECEIVE("receive_money", "Receive"),
-    PROFILE("profile", "Profile")
+enum class BottomTab(val route: String, val label: String, @androidx.annotation.StringRes val labelRes: Int) {
+    HOME("home", "Home", com.festpay.app.R.string.tab_home),
+    TRANSACTIONS("transactions", "Transactions", com.festpay.app.R.string.tab_transactions),
+    RECEIVE("receive_money", "Receive", com.festpay.app.R.string.tab_receive),
+    PROFILE("profile", "Profile", com.festpay.app.R.string.tab_profile)
 }
 
 @Composable
@@ -61,7 +64,10 @@ fun V4SHBottomNavigation(navController: NavHostController) {
                         }
                         Icon(imageVector = icon, contentDescription = tab.label)
                     },
-                    label = { Text(tab.label) },
+                    label = {
+                        Text(androidx.compose.ui.res.stringResource(tab.labelRes), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.sp))
+                    },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = V4SHColors.Tertiary,
                         selectedTextColor = V4SHColors.Tertiary,

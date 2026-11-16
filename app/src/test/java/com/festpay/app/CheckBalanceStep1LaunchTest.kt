@@ -24,6 +24,33 @@ import org.junit.Test
  */
 class CheckBalanceStep1LaunchTest {
 
+    @Test
+    fun `delayed balance session reset preserves balance routing and clears stale payment data`() {
+        val session = FestPayAccessibilityService.UssdSessionData
+        session.reset(balanceCheck = true)
+        session.recipientVpa = "stale@upi"
+        session.amount = "250"
+        session.parsedBalance = "999"
+        session.currentPresentationState = "SEND_MONEY"
+
+        // Exercise the same reset used when the balance broadcast arrives late.
+        session.reset(balanceCheck = true)
+
+        assertTrue(session.isBalanceCheck)
+        assertEquals("", session.recipientVpa)
+        assertEquals("", session.amount)
+        assertNull(session.parsedBalance)
+        assertEquals("CONNECTING", session.currentPresentationState)
+    }
+
+    @Test
+    fun `payment reset clears a preceding balance session`() {
+        val session = FestPayAccessibilityService.UssdSessionData
+        session.reset(balanceCheck = true)
+        session.reset()
+        assertFalse(session.isBalanceCheck)
+    }
+
     @Before
     fun setUp() {
         FestPayAccessibilityService.UssdSessionData.reset()
