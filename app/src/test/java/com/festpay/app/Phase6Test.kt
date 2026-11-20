@@ -69,4 +69,13 @@ class Phase6Test {
         assertFalse("v4sh itself", BankingGuard.shouldSleep(true, "com.festpay.app", false))
         assertFalse(BankingGuard.shouldSleep(true, null, false))
     }
+
+    @Test fun aLoneEchoedDigitIsRecognisedAsADroppedCarrierSession() {
+        assertTrue(UssdNavigationPolicy.isEchoedInput("Carrier info 1 OK"))
+        assertTrue(UssdNavigationPolicy.isEchoedInput("Carrier info 3 OK"))
+        assertTrue(UssdNavigationPolicy.isEchoedInput("3"))
+        assertFalse(UssdNavigationPolicy.isEchoedInput("Enter UPI ID"))
+        assertFalse(UssdNavigationPolicy.isEchoedInput("1. Send Money 3. Check Balance"))
+        assertFalse(UssdNavigationPolicy.isEchoedInput("Your balance is Rs 12"))
+    }
 }

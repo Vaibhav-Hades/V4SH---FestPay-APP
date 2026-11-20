@@ -120,6 +120,10 @@ object UssdNavigationPolicy {
         return true
     }
 
+    /** The carrier answered with just the digit V4SH sent ("Carrier info", "1", "OK"): its *99# session dropped, it did not advance. */
+    fun isEchoedInput(text: String): Boolean =
+        Regex("""^\s*(?:carrier\s+info\s*)?[0-9]{1,2}\s*(?:ok\s*)?$""", RegexOption.IGNORE_CASE).matches(normalized(text).trim())
+
     fun confirmationDigit(text: String): String? {
         val value = normalized(text)
         val instructions = Regex("\\b(?:press|enter|reply|select)\\s+([1-9])\\s+(?:to\\s+)?confirm\\b").findAll(value).map { it.groupValues[1] }

@@ -46,6 +46,10 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
         const val EXTRA_CONNECTION_ID = "com.festpay.app.EXTRA_CONNECTION_ID"
         internal const val NAVIGATION_TIMEOUT_MS = 120_000L
         internal const val AUTO_OFF_DELAY_MS = 9_000L
+        /** Pause before V4SH answers a carrier menu. */
+        internal const val INPUT_SETTLE_MS = 700L
+        /** Whether V4SH presses OK on a plain carrier notice shown before the menu (for example "Welcome to *99#"). */
+        internal const val AUTO_PRESS_OK = true
         internal const val PIN_RESULT_TIMEOUT_MS = 300_000L
     }
 
@@ -211,6 +215,7 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
         dialogReturn.removeCallbacksAndMessages(null)
         balanceCancel.removeCallbacksAndMessages(null)
         balanceDialogSeen = false
+        balanceMenuSeen = false
         setupTyped.clear()
         resultGrace.removeCallbacksAndMessages(null)
         infoOkClicks = 0
@@ -344,6 +349,7 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
         }
         if (event.windowId >= 0 && rootNode.windowId >= 0 && event.windowId != rootNode.windowId) return
         if (UssdSessionData.isBalanceCheck) balanceDialogSeen = true
+        if (UssdSessionData.isBalanceCheck && hasEditableEditText(rootNode)) balanceMenuSeen = true
 
         // One-time carrier setup screens (choose bank, card details, create PIN): never typed into by V4SH.
         val setupText = collectAllTexts(rootNode, preserveCase = true)
@@ -390,10 +396,18 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
         // Balance: remember the carrier's own words, and if it plainly rejects the request, say so now instead of waiting.
         val carrierWords = plainCarrierMessage(collectAllTexts(rootNode, preserveCase = true))
         if (carrierWords != null && !isPinOrSensitiveScreen(screenText, hasEditable)) UssdSessionData.lastCarrierMessage = carrierWords
-        if (carrierWords != null && !hasEditable && ussdState != USSDState.SUCCESS && UssdNavigationPolicy.isCarrierRejection(screenText)) {
+        val echoed = carrierWords != null && !hasEditable && UssdNavigationPolicy.isEchoedInput(collectAllTexts(rootNode, preserveCase = true))
+        if (carrierWords != null && carrierWords != lastBalanceLogged) {
+            lastBalanceLogged = carrierWords
+            com.festpay.app.data.PaymentDiagnostics.stage("svc.balanceText", "TEXT", "text=" + carrierWords.take(120))
+        }
+        if (carrierWords != null && !hasEditable && ussdState != USSDState.SUCCESS && (echoed || UssdNavigationPolicy.isCarrierRejection(screenText))) {
             resultProcessed = true
             ussdState = USSDState.UNKNOWN
-            UssdSessionData.errorMessage = "The carrier replied: \"$carrierWords\""
+            UssdSessionData.errorMessage = if (echoed)
+                "The carrier answered with only the number V4SH sent, not the next menu, so its *99# session dropped. No balance was read. Try again. If it repeats, dial *99# yourself to check that your bank's service answers on this SIM."
+                else "The carrier replied: \"$carrierWords\""
+            if (echoed) closeEchoDialog(rootNode)
             UssdSessionData.currentPresentationState = "BALANCE_UNKNOWN"
             UssdSessionData.operationActive = false
             return
@@ -743,10 +757,11 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
 
     /**
      * Presses OK on a plain carrier notice shown BEFORE the menu (no input box, not a rejection, result, setup or PIN screen).
-     * At most twice per session. Returns true when OK was pressed.
+     * At most once per session (a second press could dismiss the real menu that follows). Returns true when OK was pressed.
      */
     private fun dismissInfoNotice(root: AccessibilityNodeInfo, labels: String, editable: Boolean): Boolean {
-        if (infoOkClicks >= 2 || !UssdNavigationPolicy.isInformationalNotice(labels, editable) || hasPasswordField(root)) return false
+        if (!AUTO_PRESS_OK) return false
+        if (infoOkClicks >= 1 || !UssdNavigationPolicy.isInformationalNotice(labels, editable) || hasPasswordField(root)) return false
         fun findOk(n: AccessibilityNodeInfo): AccessibilityNodeInfo? {
             if (n.isPassword || n.isEditable || n.className == "android.widget.EditText") return null
             if (n.isClickable && com.festpay.app.data.UssdControlPolicy.isOk(n.text)) return n
@@ -758,6 +773,18 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
         com.festpay.app.data.PaymentDiagnostics.stage("svc.infoOk", if (clicked) "CLICKED" else "FAILED")
         if (clicked) infoOkClicks++
         return clicked
+    }
+
+    /** Closes the leftover "Carrier info <digit> OK" box after V4SH has reported that the carrier session dropped. */
+    private fun closeEchoDialog(root: AccessibilityNodeInfo) {
+        if (hasPasswordField(root)) return
+        fun findOk(n: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            if (n.isPassword || n.isEditable || n.className == "android.widget.EditText") return null
+            if (n.isClickable && com.festpay.app.data.UssdControlPolicy.isOk(n.text)) return n
+            for (i in 0 until n.childCount) n.getChild(i)?.let { c -> findOk(c)?.let { return it } }
+            return null
+        }
+        runCatching { findOk(root)?.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
     }
 
     private val setupTyped = mutableMapOf<com.festpay.app.data.SetupPromptKind, Long>()
@@ -807,6 +834,8 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
     }
 
     private var balanceDialogSeen = false
+    private var balanceMenuSeen = false
+    private var lastBalanceLogged: String? = null
     private val balanceCancel = android.os.Handler(android.os.Looper.getMainLooper())
 
     /**
@@ -816,7 +845,11 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
      */
     private fun scheduleBalanceCancelCheck() {
         if (!UssdSessionData.isBalanceCheck || !UssdSessionData.operationActive || !sessionArmed || !balanceDialogSeen || resultProcessed) return
-        val afterPin = ussdState == USSDState.AUTHENTICATION_REQUIRED || ussdState == USSDState.WAITING_RESULT
+        // Once V4SH has sent an option, the carrier dialog normally CLOSES while it waits for the network, and the reply can take
+        // 30 seconds or more. That is waiting, not a cancel: only a dialog closed before anything was sent is a cancel.
+        // Before the menu has ever appeared, a closing dialog is the carrier's "Welcome to *99#" notice: the menu opens after it.
+        val afterPin = !balanceMenuSeen || inputFilled || ussdState == USSDState.WAITING_RESPONSE ||
+            ussdState == USSDState.AUTHENTICATION_REQUIRED || ussdState == USSDState.WAITING_RESULT
         val id = sessionRequestId
         balanceCancel.removeCallbacksAndMessages(null)
         balanceCancel.postDelayed({
@@ -826,7 +859,7 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
             com.festpay.app.data.PaymentDiagnostics.stage("svc.balance", "CARRIER_CLOSED", "afterPin=$afterPin")
             resultProcessed = true
             ussdState = USSDState.UNKNOWN
-            UssdSessionData.errorMessage = "The carrier screen was closed before a balance arrived. Nothing was changed. Tap Try Again to check again."
+            UssdSessionData.errorMessage = withCarrierWords("The carrier screen was closed before a balance arrived. Nothing was changed. Tap Try Again to check again.")
             UssdSessionData.currentPresentationState = "BALANCE_UNKNOWN"
             operationTimeout.removeCallbacksAndMessages(null)
             sessionArmed = false
@@ -837,7 +870,7 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 })
             } catch (_: Exception) { }
-        }, if (afterPin) 8_000L else 1_200L)
+        }, if (afterPin) 60_000L else 1_200L)
     }
 
     private fun scheduleReturnAfterDialogRemoval() {
@@ -949,6 +982,16 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
         val before = flow.progress.stage
         val input = flow.observe(labels, editable, eventTime)
         if (input == null && before == CarrierStage.WAITING && flow.progress.stage == CarrierStage.WAITING && dismissInfoNotice(root, labels, editable)) return
+        // Debug builds only (PaymentDiagnostics is stripped from release): the carrier's own words when assistance stops.
+        if (before != CarrierStage.INTERRUPTED && flow.progress.stage == CarrierStage.INTERRUPTED) {
+            com.festpay.app.data.PaymentDiagnostics.stage("svc.interruptText", "TEXT", "text=" + labels.replace('\n', '|').take(120))
+            if (UssdNavigationPolicy.isEchoedInput(labels)) {
+                val msg = "The carrier answered with only the number V4SH sent, not the next menu, so its *99# session dropped. Nothing was paid. Try again. If it repeats, dial *99# yourself to check that your bank's service answers on this SIM."
+                UssdSessionData.errorMessage = msg
+                com.festpay.app.data.IssueLog.record("Carrier session dropped", msg)
+                closeEchoDialog(root)
+            }
+        }
         com.festpay.app.data.PaymentDiagnostics.stage("svc.observe", "FRAME",
             "stage=${before.name}->${flow.progress.stage.name} issue=${flow.progress.issue.name} editable=$editable offered=${input?.kind?.name ?: "none"} chars=${labels.length}")
         if (UssdSessionData.launchDisposition != com.festpay.app.data.LaunchDisposition.CARRIER_OBSERVED &&
@@ -975,6 +1018,9 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
             if (!CarrierPaymentFlow.matchesInput(input, collectAllTexts(root), hasEditableEditText(root))) return no("PROMPT_NO_LONGER_MATCHES")
             return true
         }
+        // Give the carrier's dialog a moment to settle before answering, like a person would. Answering within milliseconds of a
+        // menu appearing can race the carrier session. The prompt is re-checked (refresh + match) right after.
+        runCatching { Thread.sleep(INPUT_SETTLE_MS) }
         val sent = try {
             if (!freshPrompt()) false
             else if (input.kind == CarrierInputKind.CONFIRMATION) false // Native user confirmation only.
