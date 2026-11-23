@@ -44,6 +44,9 @@ fun MainNavHost(navController: NavHostController) {
             composable("spending") { SpendingScreen(navController, paymentViewModel) }
             composable("language") { LanguageScreen(navController) }
             composable("demo") { DemoPaymentScreen(navController) }
+            composable("doctor") { CarrierDoctorScreen(navController) }
+            composable("spoken") { SpokenConfirmationScreen(navController) }
+            composable("split_bill") { SplitBillScreen(navController, paymentViewModel) }
             composable("bank_setup") { BankSetupScreen(navController) }
             composable("guided_setup") { GuidedSetupScreen(navController) }
             composable("payment_readiness") { PaymentReadinessScreen(navController, paymentViewModel) }

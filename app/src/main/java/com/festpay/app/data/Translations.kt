@@ -65,7 +65,7 @@ object Translations {
         E("Nobody yet.", "अभी कोई नहीं।", "ఇంకా ఎవరూ లేరు."),
         E("Export history", "इतिहास निर्यात करें", "చరిత్రను ఎగుమతి చేయండి"),
         E("Export CSV", "CSV निर्यात करें", "CSV ఎగుమతి చేయండి"),
-        E("Scan a QR from a picture", "तस्वीर से QR स्कैन करें", "చిత్రం నుండి QR స్కాన్ చేయండి"),
+        E("Upload QR from gallery", "गैलरी से QR अपलोड करें", "గ్యాలరీ నుండి QR అప్‌లోడ్ చేయండి"),
         E("Paste copied UPI ID or link", "कॉपी की गई UPI ID या लिंक पेस्ट करें", "కాపీ చేసిన UPI ID లేదా లింక్ అతికించండి"),
         E("Language", "भाषा", "భాష"),
         E("Demo", "डेमो", "డెమో"),

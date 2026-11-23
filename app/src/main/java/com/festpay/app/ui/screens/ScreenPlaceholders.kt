@@ -209,7 +209,7 @@ internal fun V4shTopBar(
 // ==========================================
 
 @Composable
-private fun RefreshHistoryOnResume(paymentViewModel: PaymentViewModel) {
+internal fun RefreshHistoryOnResume(paymentViewModel: PaymentViewModel) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(paymentViewModel, context, lifecycle) {
@@ -826,6 +826,18 @@ fun ProfileScreen(navController: NavHostController, paymentViewModel: PaymentVie
                 Spacer(modifier = Modifier.height(8.dp))
                 ProfileMenuCard(title = "Try a demo", subtitle = "See a payment walk-through. No money, nothing saved", icon = Icons.Default.Settings) {
                     navController.navigate("demo")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Carrier Doctor", subtitle = "Check why *99# is not answering", icon = Icons.Default.Settings) {
+                    navController.navigate("doctor")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Split a bill", subtitle = "Share one amount between people", icon = Icons.Default.Settings) {
+                    navController.navigate("split_bill")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ProfileMenuCard(title = "Spoken confirmation", subtitle = "Hear the amount when a payment is confirmed", icon = Icons.Default.Settings) {
+                    navController.navigate("spoken")
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 ProfileMenuCard(title = "Sleep mode", subtitle = "Switch V4SH off so your banking apps are not disturbed", icon = Icons.Default.Lock) {
@@ -1629,9 +1641,11 @@ fun QrScannerScreen(navController: NavHostController) {
                 Text("Keep the QR code steady", style = MaterialTheme.typography.bodySmall.copy(color = SecondaryUmber), modifier = Modifier.padding(top = 2.dp))
                 if (cameraError) {
                     Text("Camera could not start. Close other camera apps and reopen the scanner, or enter the UPI ID manually.", color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { navController.navigate("upi_payment") }) { Text("Enter UPI ID instead") }
-                    GalleryScanButton(navController)
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                // Always shown, right under the camera: a QR saved as a screenshot or photo can be uploaded and read.
+                GalleryScanButton(navController)
+                TextButton(onClick = { navController.navigate("upi_payment") }) { Text("Enter UPI ID instead") }
 
                 // Developer Test Error Controls (Isolated under debug trigger)
 

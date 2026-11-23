@@ -46,8 +46,8 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
         const val EXTRA_CONNECTION_ID = "com.festpay.app.EXTRA_CONNECTION_ID"
         internal const val NAVIGATION_TIMEOUT_MS = 120_000L
         internal const val AUTO_OFF_DELAY_MS = 9_000L
-        /** Pause before V4SH answers a carrier menu. */
-        internal const val INPUT_SETTLE_MS = 700L
+        /** Pause before V4SH answers a carrier menu. 0: answer the moment the menu is detected. */
+        internal const val INPUT_SETTLE_MS = 0L
         /** Whether V4SH presses OK on a plain carrier notice shown before the menu (for example "Welcome to *99#"). */
         internal const val AUTO_PRESS_OK = true
         internal const val PIN_RESULT_TIMEOUT_MS = 300_000L
@@ -1018,9 +1018,8 @@ class FestPayAccessibilityService : AccessibilityService(), UssdSessionHost {
             if (!CarrierPaymentFlow.matchesInput(input, collectAllTexts(root), hasEditableEditText(root))) return no("PROMPT_NO_LONGER_MATCHES")
             return true
         }
-        // Give the carrier's dialog a moment to settle before answering, like a person would. Answering within milliseconds of a
-        // menu appearing can race the carrier session. The prompt is re-checked (refresh + match) right after.
-        runCatching { Thread.sleep(INPUT_SETTLE_MS) }
+        // Optional pause before answering (off). The prompt is re-checked (refresh + match) right before typing either way.
+        if (INPUT_SETTLE_MS > 0) runCatching { Thread.sleep(INPUT_SETTLE_MS) }
         val sent = try {
             if (!freshPrompt()) false
             else if (input.kind == CarrierInputKind.CONFIRMATION) false // Native user confirmation only.

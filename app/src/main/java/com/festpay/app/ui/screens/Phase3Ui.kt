@@ -3,6 +3,8 @@ package com.festpay.app.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -53,9 +55,13 @@ fun GalleryScanButton(navController: NavHostController) {
             .addOnFailureListener { message = "Could not read that picture." }
             .addOnCompleteListener { scanner.close() }
     }
-    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-        TextButton(onClick = { picker.launch("image/*") }) { Text("Scan a QR from a picture") }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { message = null; picker.launch("image/*") }, shape = largeCardShape, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Upload QR from gallery")
+        }
+        message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
     }
 }
 

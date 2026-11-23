@@ -85,6 +85,7 @@ fun PaymentProgressScreen(navController: NavHostController) {
     val finished = progress?.stage == CarrierStage.RESULT
     val verdict = progress?.let { CarrierOutcomePolicy.decide(it) }
     val success = verdict == CarrierOutcome.SUCCESS
+    SpeakOnSuccess(success, amount, progress?.payeeName)
     // Owner request: no carrier success message means it is shown as unsuccessful (the attempt itself stays open in history).
     val unsuccessful = interrupted || (finished && !success)
     val name = progress?.payeeName
